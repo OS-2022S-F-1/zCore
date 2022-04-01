@@ -2,8 +2,8 @@ ROOTFS_TAR := alpine-minirootfs-3.12.0-x86_64.tar.gz
 ROOTFS_URL := http://dl-cdn.alpinelinux.org/alpine/v3.12/releases/x86_64/$(ROOTFS_TAR)
 
 RISCV64_ROOTFS_TAR := prebuild.tar.xz
-RISCV64_ROOTFS_URL := https://github.com/rcore-os/libc-test-prebuilt/releases/download/0.1/$(RISCV64_ROOTFS_TAR)
-LIBC_TEST_URL := https://github.com/rcore-os/libc-test.git
+RISCV64_ROOTFS_URL := ssh://git@github.com/rcore-os/libc-test-prebuilt/releases/download/0.1/$(RISCV64_ROOTFS_TAR)
+LIBC_TEST_URL := ssh://git@github.com/rcore-os/libc-test.git
 
 ARCH ?= x86_64
 rcore_fs_fuse_revision := 7f5eeac
@@ -29,7 +29,7 @@ prebuilt/linux/riscv64/$(RISCV64_ROOTFS_TAR):
 rootfs: prebuilt/linux/$(ROOTFS_TAR)
 	rm -rf rootfs && mkdir -p rootfs
 	tar xf $< -C rootfs
-# libc-libos.so (convert syscall to function call) is from https://github.com/rcore-os/musl/tree/rcore
+# libc-libos.so (convert syscall to function call) is from ssh://git@github.com/rcore-os/musl/tree/rcore
 	cp prebuilt/linux/libc-libos.so rootfs/lib/ld-musl-x86_64.so.1
 	@for VAR in $(BASENAMES); do gcc $(TEST_DIR)$$VAR.c -o $(DEST_DIR)$$VAR $(CFLAG); done
 
@@ -50,7 +50,7 @@ rt-test:
 rcore-fs-fuse:
 ifneq ($(shell rcore-fs-fuse dir image git-version), $(rcore_fs_fuse_revision))
 	@echo Installing rcore-fs-fuse
-	@cargo install rcore-fs-fuse --git https://github.com/rcore-os/rcore-fs --rev $(rcore_fs_fuse_revision) --force
+	@cargo install rcore-fs-fuse --git ssh://git@github.com/rcore-os/rcore-fs --rev $(rcore_fs_fuse_revision) --force
 endif
 
 $(OUT_IMG): prebuilt/linux/$(ROOTFS_TAR) rcore-fs-fuse
@@ -61,7 +61,7 @@ $(OUT_IMG): prebuilt/linux/$(ROOTFS_TAR) rcore-fs-fuse
 	@cp $(TMP_ROOTFS)/lib/ld-musl-x86_64.so.1 rootfs/lib/
 	@rcore-fs-fuse $@ rootfs zip
 # recover rootfs/ld-musl-x86_64.so.1 for zcore usr libos
-# libc-libos.so (convert syscall to function call) is from https://github.com/rcore-os/musl/tree/rcore
+# libc-libos.so (convert syscall to function call) is from ssh://git@github.com/rcore-os/musl/tree/rcore
 	@cp prebuilt/linux/libc-libos.so rootfs/lib/ld-musl-x86_64.so.1
 
 image: $(OUT_IMG)
@@ -100,7 +100,7 @@ baremetal-test-img: prebuilt/linux/$(ROOTFS_TAR) rcore-fs-fuse
 	@cd rootfs/libc-test && cp config.mak.def config.mak && echo 'CC := musl-gcc' >> config.mak && make -j
 	@rcore-fs-fuse $(OUT_IMG) rootfs zip
 # recover rootfs/ld-musl-x86_64.so.1 for zcore usr libos
-# libc-libos.so (convert syscall to function call) is from https://github.com/rcore-os/musl/tree/rcore
+# libc-libos.so (convert syscall to function call) is from ssh://git@github.com/rcore-os/musl/tree/rcore
 	@cp prebuilt/linux/libc-libos.so rootfs/lib/ld-musl-x86_64.so.1
 	@echo Resizing $(ARCH).img
 	@qemu-img resize $(OUT_IMG) +5M

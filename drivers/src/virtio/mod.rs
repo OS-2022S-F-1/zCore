@@ -1,4 +1,4 @@
-//! Packaging of [`virtio-drivers` library](https://github.com/rcore-os/virtio-drivers).
+//! Packaging of [`virtio-drivers` library](ssh://git@github.com/rcore-os/virtio-drivers).
 
 mod blk;
 mod console;

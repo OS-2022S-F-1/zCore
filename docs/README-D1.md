@@ -19,7 +19,7 @@ make build LINUX=1 ARCH=riscv64 PLATFORM=d1 MODE=release
 下载并编译烧写工具 `xfel`:
 
 ```sh
-git clone https://github.com/xboot/xfel.git
+git clone ssh://git@github.com/xboot/xfel.git
 cd xfel
 make
 ```
@@ -34,10 +34,10 @@ make run_d1 LINUX=1 ARCH=riscv64 PLATFORM=d1 MODE=release
 
 ### 手动烧写运行：
 
-1. 下载 D1 开发板的 [OpenSBI](https://github.com/elliott10/opensbi) 源码，并编译出镜像 build/platform/thead/c910/firmware/fw_payload.elf：
+1. 下载 D1 开发板的 [OpenSBI](ssh://git@github.com/elliott10/opensbi) 源码，并编译出镜像 build/platform/thead/c910/firmware/fw_payload.elf：
 
     ```sh
-    git clone https://github.com/elliott10/opensbi -b thead
+    git clone ssh://git@github.com/elliott10/opensbi -b thead
     cd opensbi
     make PLATFORM=thead/c910 CROSS_COMPILE=/path/to/toolchain/bin/riscv64-unknown-linux-gnu- SUNXI_CHIP=sun20iw1p1 PLATFORM_RISCV_ISA=rv64gcxthead
     ```

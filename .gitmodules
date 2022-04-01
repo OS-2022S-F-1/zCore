@@ -1,6 +1,9 @@
 [submodule "rboot"]
 	path = rboot
-	url = https://github.com/rcore-os/rboot.git
+	url = ssh://git@github.com/rcore-os/rboot.git
 [submodule "tests"]
 	path = tests
-	url = https://github.com/rcore-os/zcore-tests.git
+	url = ssh://git@github.com/rcore-os/zcore-tests.git
+[submodule "rcore-fs"]
+	path = rcore-fs
+	url = git@github.com:sunyt32/rcore-fs.git

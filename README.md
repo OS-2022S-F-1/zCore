@@ -1,6 +1,6 @@
 # zCore
 
-[![CI](https://github.com/rcore-os/zCore/workflows/CI/badge.svg?branch=master)](https://github.com/rcore-os/zCore/actions)
+[![CI](ssh://git@github.com/rcore-os/zCore/workflows/CI/badge.svg?branch=master)](ssh://git@github.com/rcore-os/zCore/actions)
 [![Docs](https://img.shields.io/badge/docs-alpha-blue)](https://rcore-os.github.io/zCore/)
 [![Coverage Status](https://coveralls.io/repos/github/rcore-os/zCore/badge.svg?branch=master)](https://coveralls.io/github/rcore-os/zCore?branch=master)
 
@@ -37,7 +37,7 @@ Environments：
 Clone repo and pull prebuilt fuchsia images:
 
 ```sh
-git clone https://github.com/rcore-os/zCore --recursive
+git clone ssh://git@github.com/rcore-os/zCore --recursive
 cd zCore
 git lfs install
 git lfs pull
@@ -46,7 +46,7 @@ git lfs pull
 For users in China, there's a mirror you can try:
 
 ```sh
-git clone https://github.com.cnpmjs.org/rcore-os/zCore --recursive
+git clone ssh://git@github.com.cnpmjs.org/rcore-os/zCore --recursive
 ```
 ### Run zcore in libos mode
 #### Run zcore in linux-libos mode
@@ -199,7 +199,7 @@ specified apps.
 
 ## Graph/Game
 
-snake game: https://github.com/rcore-os/rcore-user/blob/master/app/src/snake.c
+snake game: ssh://git@github.com/rcore-os/rcore-user/blob/master/app/src/snake.c
 
 ### Step1: compile usr app
 We can use musl-gcc compile it in x86_64 mode
@@ -248,8 +248,8 @@ make doc
 ![](./docs/structure.svg)
 
 [zircon]: https://fuchsia.googlesource.com/fuchsia/+/master/zircon/README.md
-[kernel-objects]: https://github.com/PanQL/zircon/blob/master/docs/objects.md
-[syscalls]: https://github.com/PanQL/zircon/blob/master/docs/syscalls.md
+[kernel-objects]: ssh://git@github.com/PanQL/zircon/blob/master/docs/objects.md
+[syscalls]: ssh://git@github.com/PanQL/zircon/blob/master/docs/syscalls.md
 
 ### Hardware Abstraction Layer
 
@@ -260,4 +260,4 @@ make doc
 | Exception Handling        | Interrupt  | Signal            |
 
 ### Small Goal & Little Plans
-- https://github.com/rcore-os/zCore/wiki/Plans
+- ssh://git@github.com/rcore-os/zCore/wiki/Plans

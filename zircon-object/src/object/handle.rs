@@ -134,7 +134,7 @@ mod tests {
         assert_eq!(info2.props, 0);
 
         // Let struct lines counted covered.
-        // See https://github.com/mozilla/grcov/issues/450
+        // See ssh://git@github.com/mozilla/grcov/issues/450
         let _ = HandleBasicInfo::default();
     }
 }
