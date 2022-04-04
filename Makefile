@@ -5,8 +5,7 @@ RISCV64_ROOTFS_TAR := prebuild.tar.xz
 RISCV64_ROOTFS_URL := ssh://git@github.com/rcore-os/libc-test-prebuilt/releases/download/0.1/$(RISCV64_ROOTFS_TAR)
 LIBC_TEST_URL := ssh://git@github.com/rcore-os/libc-test.git
 
-ARCH ?= x86_64
-rcore_fs_fuse_revision := 7f5eeac
+ARCH ?= riscv64
 OUT_IMG := zCore/$(ARCH).img
 TMP_ROOTFS := /tmp/rootfs
 
@@ -18,7 +17,7 @@ BASENAMES := $(notdir  $(basename $(TEST_PATH)))
 
 CFLAG := -Wl,--dynamic-linker=/lib/ld-musl-x86_64.so.1
 
-.PHONY: rootfs libc-test rcore-fs-fuse image
+.PHONY: rootfs libc-test image
 
 prebuilt/linux/$(ROOTFS_TAR):
 	wget $(ROOTFS_URL) -O $@
@@ -37,6 +36,8 @@ riscv-rootfs:prebuilt/linux/riscv64/$(RISCV64_ROOTFS_TAR)
 	@rm -rf riscv_rootfs && mkdir -p riscv_rootfs
 	@tar -xvf $< -C riscv_rootfs --strip-components 1
 	@ln -s busybox riscv_rootfs/bin/ls
+	cd linux-user && make build
+	cd ..
 
 libc-test:
 	cd rootfs && git clone $(LIBC_TEST_URL) --depth 1
@@ -47,13 +48,7 @@ rt-test:
 	cd rootfs/rt-tests && make
 	echo x86 gcc build rt-test,now need manual modificy.
 
-rcore-fs-fuse:
-ifneq ($(shell rcore-fs-fuse dir image git-version), $(rcore_fs_fuse_revision))
-	@echo Installing rcore-fs-fuse
-	@cargo install rcore-fs-fuse --git ssh://git@github.com/rcore-os/rcore-fs --rev $(rcore_fs_fuse_revision) --force
-endif
-
-$(OUT_IMG): prebuilt/linux/$(ROOTFS_TAR) rcore-fs-fuse
+$(OUT_IMG): prebuilt/linux/$(ROOTFS_TAR)
 	@echo Generating $(ARCH).img
 	@rm -rf $(TMP_ROOTFS)
 	@mkdir -p $(TMP_ROOTFS)
@@ -69,7 +64,7 @@ image: $(OUT_IMG)
 	@qemu-img resize $(OUT_IMG) +5M
 
 
-riscv-image: rcore-fs-fuse riscv-rootfs
+riscv-image: riscv-rootfs
 	@echo building riscv.img
 	@rcore-fs-fuse zCore/riscv64.img riscv_rootfs zip
 	@qemu-img resize -f raw zCore/riscv64.img +5M
@@ -89,7 +84,7 @@ clean:
 doc:
 	cargo doc --open
 
-baremetal-test-img: prebuilt/linux/$(ROOTFS_TAR) rcore-fs-fuse
+baremetal-test-img: prebuilt/linux/$(ROOTFS_TAR)
 	@echo Generating $(ARCH).img
 	@rm -rf $(TMP_ROOTFS)
 	@mkdir -p $(TMP_ROOTFS)

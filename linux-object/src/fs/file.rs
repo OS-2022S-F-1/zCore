@@ -1,6 +1,7 @@
 //! File handle for process
 
-use alloc::{boxed::Box, string::String, sync::Arc};
+use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
+use core::borrow::BorrowMut;
 
 use async_trait::async_trait;
 use spin::RwLock;
@@ -11,6 +12,9 @@ use zircon_object::vm::{pages, VmObject};
 
 use super::FileLike;
 use crate::error::{LxError, LxResult};
+use super::translate;
+
+pub static PADDING_KEY: [u8; 16] = [0; 16];
 
 bitflags::bitflags! {
     /// File open flags
@@ -25,6 +29,8 @@ bitflags::bitflags! {
         const CREATE = 1 << 6;
         /// error if CREATE and the file exists
         const EXCLUSIVE = 1 << 7;
+        /// encrypt file
+        const ENCRYPT = 1 << 8;
         /// truncate file upon open
         const TRUNCATE = 1 << 9;
         /// append on each write
@@ -59,6 +65,10 @@ impl OpenFlags {
     pub fn close_on_exec(self) -> bool {
         self.contains(Self::CLOEXEC)
     }
+    /// check if the OpenFlags coontains entrypt
+    pub fn is_encrypt(self) -> bool {
+        self.contains(Self::ENCRYPT)
+    }
 }
 
 /// file seek type
@@ -79,6 +89,8 @@ struct FileInner {
     offset: u64,
     /// file open options
     flags: OpenFlags,
+    /// key pointer
+    key: &'static [u8],
     /// file INode
     inode: Arc<dyn INode>,
 }
@@ -96,6 +108,11 @@ pub struct File {
 impl_kobject!(File);
 
 impl FileInner {
+    fn align(offset: u64, len: u64) -> (u64, u64) {
+        let align_offset = offset % 128;
+        let align_end = (offset + len + 127) % 128;
+        (align_offset, align_end - align_offset)
+    }
     /// read from file
     async fn read(&mut self, buf: &mut [u8]) -> LxResult<usize> {
         let len = self.read_at(self.offset, buf).await?;
@@ -103,11 +120,25 @@ impl FileInner {
         Ok(len)
     }
 
-    /// read from file at given offset
     async fn read_at(&mut self, offset: u64, buf: &mut [u8]) -> LxResult<usize> {
         if !self.flags.readable() {
             return Err(LxError::EBADF);
         }
+        if self.flags.is_encrypt() {
+            let (align_offset, align_len) = align(offset, buf.len());
+            let mut more_buf: Vec<u8> = Vec::with_capacity(align_len);
+            let result = _read_at(align_offset, more_buf.borrow_mut());
+            let translate_buf = translate(self.key, &more_buf, False);
+            let bias = offset - align_offset;
+            buf.copy_from_slice(translate_buf.as_slice()[(bias)..(bias + but.len())]);
+            result
+        } else {
+            _read_at(offset, buf)
+        }
+    }
+
+    /// read from file at given offset
+    async fn _read_at(&mut self, offset: u64, buf: &mut [u8]) -> LxResult<usize> {
         if !self.flags.non_block() {
             // block
             loop {
@@ -141,8 +172,21 @@ impl FileInner {
         if !self.flags.writable() {
             return Err(LxError::EBADF);
         }
-        let len = self.inode.write_at(offset as usize, buf)?;
-        Ok(len)
+        if self.flags.is_encrypt() {
+            let (align_offset, align_len) = align(offset, buf.len());
+            let bias = offset - align_offset;
+            let mut more_buf: Vec<u8> = Vec::with_capacity(align_len);
+            _read_at(align_offset, more_buf.borrow_mut());
+            let mut translate_buf = translate(self.key, &more_buf, False);
+            translate_buf.borrow_mut()[(bias)..(bias + but.len())]
+                .copy_from_slice(buf);
+            let encrypted_buf = translate(self.key, &translate_buf, True);
+            let len = self.inode.write_at(align_offset as usize, encrypted_buf.as_slice())?;
+            Ok(len)
+        } else {
+            let len = self.inode.write_at(offset as usize, buf)?;
+            Ok(len)
+        }
     }
 }
 
@@ -155,7 +199,21 @@ impl File {
             inner: RwLock::new(FileInner {
                 offset: 0,
                 flags,
-                inode,
+                key: &PADDING_KEY,
+                inode
+            }),
+        })
+    }
+
+    pub fn new_with_key(inode: Arc<dyn INode>, flags: OpenFlags, path: String, key: &[u8]) -> Arc<Self> {
+        Arc::new(File {
+            base: KObjectBase::new(),
+            path,
+            inner: RwLock::new(FileInner {
+                offset: 0,
+                flags,
+                key,
+                inode
             }),
         })
     }

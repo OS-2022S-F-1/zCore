@@ -8,13 +8,16 @@ members = [
     "linux-syscall",
     "loader",
     "zCore",
-    "rcore-fs/rcore-fs"
+    "rcore-fs/rcore-fs",
+    "rcore-fs/rcore-fs-aefs"
 ]
 
 exclude = [
     "zircon-user",
     "rboot",
+    "linux-user"
 ]
 
 [profile.release]
 lto = true
+

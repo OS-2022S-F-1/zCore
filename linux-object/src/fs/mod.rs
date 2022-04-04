@@ -8,6 +8,8 @@ mod pseudo;
 mod stdio;
 
 pub mod rcore_fs_wrapper;
+mod aes;
+mod matrix;
 
 use alloc::{boxed::Box, string::ToString, sync::Arc, vec::Vec};
 use core::convert::TryFrom;
@@ -18,8 +20,8 @@ use downcast_rs::impl_downcast;
 use kernel_hal::drivers;
 use rcore_fs::vfs::{FileSystem, FileType, INode, PollStatus, Result};
 use rcore_fs_devfs::{
-    special::{NullINode, ZeroINode},
     DevFS,
+    special::{NullINode, ZeroINode},
 };
 use rcore_fs_mountfs::MountFS;
 use rcore_fs_ramfs::RamFS;
@@ -29,6 +31,7 @@ use crate::error::{LxError, LxResult};
 use crate::process::LinuxProcess;
 use devfs::RandomINode;
 use pseudo::Pseudo;
+use aes::translate;
 
 pub use file::{File, OpenFlags, SeekFrom};
 pub use pipe::Pipe;

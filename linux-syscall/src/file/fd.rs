@@ -10,8 +10,9 @@ use alloc::string::String;
 
 impl Syscall<'_> {
     /// Opens or creates a file, depending on the flags passed to the call. Returns an integer with the file descriptor.
-    pub fn sys_open(&self, path: UserInPtr<u8>, flags: usize, mode: usize) -> SysResult {
-        self.sys_openat(FileDesc::CWD, path, flags, mode)
+    pub fn sys_open(&self, path: UserInPtr<u8>, flags: usize, mode: usize,
+                    key: UserInPtr<u8>) -> SysResult {
+        self.sys_openat(FileDesc::CWD, path, flags, mode, key)
     }
 
     /// open file relative to directory file descriptor
@@ -21,10 +22,12 @@ impl Syscall<'_> {
         path: UserInPtr<u8>,
         flags: usize,
         mode: usize,
+        key: UserInPtr<u8>
     ) -> SysResult {
         let proc = self.linux_process();
         let path = path.as_c_str()?;
         let flags = OpenFlags::from_bits_truncate(flags);
+        let key = key.as_slice(16)?;
         info!(
             "openat: dir_fd={:?}, path={:?}, flags={:?}, mode={:#o}",
             dir_fd, path, flags, mode
@@ -50,7 +53,7 @@ impl Syscall<'_> {
             proc.lookup_inode_at(dir_fd, path, true)?
         };
 
-        let file = File::new(inode, flags, path.into());
+        let file = File::new_with_key(inode, flags, path.into(), key);
         let fd = proc.add_file(file)?;
         Ok(fd.into())
     }
@@ -97,6 +100,7 @@ impl Syscall<'_> {
 
         let base_flags =
             OpenFlags::from_bits_truncate(flags) & (OpenFlags::NON_BLOCK | OpenFlags::CLOEXEC);
+
         let read_fd = proc.add_file(File::new(
             Arc::new(read),
             base_flags | OpenFlags::RDONLY,
