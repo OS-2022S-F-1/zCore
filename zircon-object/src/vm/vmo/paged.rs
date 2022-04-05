@@ -84,7 +84,8 @@ struct VMObjectPagedInner {
     /// Physical frames of this VMO.
     frames: HashMap<usize, PageState>,
     /// All mappings to this VMO.
-    mappings: Vec<Weak<VmMapping>>,
+    mappings: RBTree<usize, Weak<VmMapping>>,
+    mapping_idx: usize,
     /// Cache Policy
     cache_policy: CachePolicy,
     /// Is contiguous
@@ -167,7 +168,8 @@ impl VMObjectPaged {
                 parent_limit: 0usize,
                 size: pages * PAGE_SIZE,
                 frames: HashMap::new(),
-                mappings: Vec::new(),
+                mappings: RBTree::new(),
+                mapping_idx: 0,
                 cache_policy: CachePolicy::Cached,
                 contiguous: false,
                 self_ref: Default::default(),
@@ -327,14 +329,21 @@ impl VMObjectTrait for VMObjectPaged {
     }
 
     fn append_mapping(&self, mapping: Weak<VmMapping>) {
-        self.get_inner_mut().1.mappings.push(mapping);
+        let mapping_idx = self.get_inner_mut().1.mapping_idx;
+        self.get_inner_mut().1.mappings.insert(mapping_idx, mapping);
+        self.get_inner_mut().1.mapping_idx += 1;
     }
 
     fn remove_mapping(&self, mapping: Weak<VmMapping>) {
-        self.get_inner_mut()
+        /*self.get_inner_mut()
             .1
             .mappings
-            .drain_filter(|x| x.strong_count() == 0 || Weak::ptr_eq(x, &mapping));
+            .drain_filter(|x| x.strong_count() == 0 || Weak::ptr_eq(x, &mapping));*/
+
+        for node in self.get_inner_mut().1.mappings.iter_pre():
+            if node.borrow().value().strong_count() == 0 || Weak::ptr_eq(node.borrow().value(), &mapping) {
+                self.get_inner_mut().1.mappings.remove(idx);
+            }       
     }
 
     fn complete_info(&self, info: &mut VmoInfo) {
@@ -592,8 +601,8 @@ impl VMObjectPagedInner {
             }
         }
         if need_unmap {
-            for map in self.mappings.iter() {
-                if let Some(map) = map.upgrade() {
+            for node in self.mappings.iter_pre() {
+                if let Some(map) = node.borrow_mut().value().upgrade() {
                     map.range_change(page_idx, 1, RangeChangeOp::Unmap);
                 }
             }
@@ -626,8 +635,8 @@ impl VMObjectPagedInner {
         }
         start -= self.parent_offset;
         end -= self.parent_offset;
-        for map in self.mappings.iter() {
-            if let Some(map) = map.upgrade() {
+        for node in self.mappings.iter_pre() {
+            if let Some(map) = node.borrow_mut().value().upgrade() {
                 map.range_change(pages(start), pages(end) - pages(start), op);
             }
         }
@@ -757,7 +766,8 @@ impl VMObjectPagedInner {
                 parent_limit: (offset + len).min(self.size),
                 size: len,
                 frames: HashMap::new(),
-                mappings: Vec::new(),
+                mappings: RBTree::new(),
+                mapping_idx: 0,
                 cache_policy: CachePolicy::Cached,
                 contiguous: false,
                 self_ref: Default::default(),
@@ -778,7 +788,8 @@ impl VMObjectPagedInner {
                 parent_limit: self.parent_limit,
                 size: self.size,
                 frames: core::mem::take(&mut self.frames),
-                mappings: Vec::new(),
+                mappings: RBTree::new(),
+                mapping_idx: 0,
                 cache_policy: CachePolicy::Cached,
                 contiguous: self.contiguous,
                 self_ref: Default::default(),
@@ -804,8 +815,8 @@ impl VMObjectPagedInner {
         self.parent_limit = self.size;
         child.inner.borrow_mut().parent = Some(hidden);
         // update mappings
-        for map in self.mappings.iter() {
-            if let Some(map) = map.upgrade() {
+        for node in self.mappings.iter_pre() {
+            if let Some(map) = node.borrow_mut().value().upgrade() {
                 map.range_change(pages(offset), pages(len), RangeChangeOp::RemoveWrite);
                 //用于写时复制
             }
@@ -994,7 +1005,12 @@ impl VMObjectPagedInner {
     }
 
     fn clear_invalild_mappings(&mut self) {
-        self.mappings.drain_filter(|x| x.strong_count() == 0);
+        // self.mappings.drain_filter(|x| x.strong_count() == 0);
+        for node in self.mappings.iter_pre() {
+            if node.borrow().value().strong_count() == 0 {
+                self.mappings.remove(idx);
+            }
+        }
     }
 
     /// Check whether it is not physically contiguous when it should be

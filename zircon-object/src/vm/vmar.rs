@@ -61,8 +61,10 @@ define_count_helper!(VmAddressRegion);
 /// The mutable part of `VmAddressRegion`.
 #[derive(Default)]
 struct VmarInner {
-    children: Vec<Arc<VmAddressRegion>>,
-    mappings: Vec<Arc<VmMapping>>,
+    children: RBTree<Arc<VmAddressRegion>>,
+    children_idx: usize,
+    mappings: RBTree<Arc<VmMapping>>,
+    mapping_idx: usize,
 }
 
 impl VmAddressRegion {
@@ -245,7 +247,8 @@ impl VmAddressRegion {
         if map_range {
             mapping.map()?;
         }
-        inner.mappings.push(mapping);
+        inner.mappings.insert(inner.mapping_idx, mapping);
+        inner.mapping_idx += 1;
         Ok(addr)
     }
 
@@ -279,13 +282,27 @@ impl VmAddressRegion {
             }
         }
         let mut new_maps = Vec::new();
-        inner.mappings.drain_filter(|map| {
+        for node in inner.mappings.iter_pre() {
+            let map = node.borrow_mut().value();
+            if let Some(new) = map.cut(begin, end) {
+                new_maps.push(new);
+            }
+            if map.size() == 0 {
+                inner.mappings.remove(idx);
+            }
+        }
+        /*inner.mappings.drain_filter(|map| {
             if let Some(new) = map.cut(begin, end) {
                 new_maps.push(new);
             }
             map.size() == 0
-        });
-        inner.mappings.extend(new_maps);
+        });*/
+        for map in new_maps.iter() {
+            inner.mappings.insert(inner.mapping_idx, map);
+            inner.mapping_idx += 1;
+        }
+        // inner.mappings.extend(new_maps);
+
         for vmar in inner.children.drain_filter(|vmar| vmar.within(begin, end)) {
             vmar.destroy_internal()?;
         }
@@ -313,7 +330,8 @@ impl VmAddressRegion {
         let length: usize = inner
             .mappings
             .iter()
-            .filter_map(|map| {
+            .filter_map(|node| {
+                let map = node.borrow_mut().value();
                 if map.end_addr() >= addr && map.addr() <= end_addr {
                     Some(end_addr.min(map.end_addr()) - addr.max(map.addr()))
                 } else {
@@ -327,17 +345,18 @@ impl VmAddressRegion {
         // check if protect flags is valid
         if inner
             .mappings
-            .iter()
-            .filter(|map| map.end_addr() >= addr && map.addr() <= end_addr) // get mappings in range: [addr, end_addr]
+            .iter_pre()
+            .filter(|node| node.borrow().value().end_addr() >= addr && node.borrow().value().addr() <= end_addr) // get mappings in range: [addr, end_addr]
             .any(|map| !map.is_valid_mapping_flags(flags))
         {
             return Err(ZxError::ACCESS_DENIED);
         }
         inner
             .mappings
-            .iter()
-            .filter(|map| map.end_addr() >= addr && map.addr() <= end_addr)
-            .for_each(|map| {
+            .iter_pre()
+            .filter(|node| node.borrow().value().end_addr() >= addr && node.borrow().value().addr() <= end_addr)
+            .for_each(|node| {
+                let map = node.borrow_mut().value()
                 let start_index = pages(addr.max(map.addr()) - map.addr());
                 let end_index = pages(end_addr.min(map.end_addr()) - map.addr());
                 map.protect(flags, start_index, end_index);
@@ -412,7 +431,8 @@ impl VmAddressRegion {
         if let Some(child) = inner.children.iter().find(|ch| ch.contains(vaddr)) {
             return child.get_vaddr_flags(vaddr);
         }
-        if let Some(mapping) = inner.mappings.iter().find(|map| map.contains(vaddr)) {
+        //return inner.mappings.get(vaddr).query_vaddr(vaddr).map(|(_, flags, _)| flags);
+        if let Some(mapping) = inner.mappings.iter_pre().find(|node| node.borrow().value().contains(vaddr)) {
             return mapping.query_vaddr(vaddr).map(|(_, flags, _)| flags);
         }
         Err(PagingError::NoMemory)
@@ -457,7 +477,7 @@ impl VmAddressRegion {
         if inner.children.iter().any(|vmar| vmar.overlap(begin, end)) {
             return false;
         }
-        if inner.mappings.iter().any(|map| map.overlap(begin, end)) {
+        if inner.mappings.iter_pre().any(|node| node.borrow().value().overlap(begin, end)) {
             return false;
         }
         true
@@ -478,7 +498,7 @@ impl VmAddressRegion {
         // try each area's end address as the start
         core::iter::once(offset_hint)
             .chain(inner.children.iter().map(|map| map.end_addr() - self.addr))
-            .chain(inner.mappings.iter().map(|map| map.end_addr() - self.addr))
+            .chain(inner.mappings.iter_pre().map(|node| node.borrow().value().end_addr() - self.addr))
             .find(|&offset| self.test_map(inner, offset, len, align))
     }
 
@@ -523,8 +543,8 @@ impl VmAddressRegion {
     pub fn dump(&self) {
         let mut guard = self.inner.lock();
         let inner = guard.as_mut().unwrap();
-        for map in inner.mappings.iter() {
-            debug!("{:x?}", map);
+        for node in inner.mappings.iter_pre() {
+            debug!("{:x?}", node.borrow().value());
         }
         for child in inner.children.iter() {
             child.dump();
@@ -535,7 +555,8 @@ impl VmAddressRegion {
     pub fn vdso_base_addr(&self) -> Option<usize> {
         let guard = self.inner.lock();
         let inner = guard.as_ref().unwrap();
-        for map in inner.mappings.iter() {
+        for node in inner.mappings.iter_pre() {
+            let map = node.borrow_mut().value();
             if map.vmo.name().starts_with("vdso") && map.inner.lock().vmo_offset == 0x7000 {
                 return Some(map.addr());
             }
@@ -560,7 +581,8 @@ impl VmAddressRegion {
         if let Some(child) = inner.children.iter().find(|ch| ch.contains(vaddr)) {
             return child.handle_page_fault(vaddr, flags);
         }
-        if let Some(mapping) = inner.mappings.iter().find(|map| map.contains(vaddr)) {
+        //return inner.mappings.get(vaddr).handle_page_fault(vaddr, flags);
+        if let Some(mapping) = inner.mappings.iter_pre().find(|node| node.borrow().value().contains(vaddr)) {
             return mapping.handle_page_fault(vaddr, flags);
         }
         Err(ZxError::NOT_FOUND)
@@ -569,8 +591,8 @@ impl VmAddressRegion {
     fn for_each_mapping(&self, f: &mut impl FnMut(&Arc<VmMapping>)) {
         let guard = self.inner.lock();
         let inner = guard.as_ref().unwrap();
-        for map in inner.mappings.iter() {
-            f(map);
+        for node in inner.mappings.iter_pre() {
+            f(node.borrow().value());
         }
         for child in inner.children.iter() {
             child.for_each_mapping(f);
@@ -623,9 +645,14 @@ impl VmAddressRegion {
     pub fn find_mapping(&self, vaddr: usize) -> Option<Arc<VmMapping>> {
         let guard = self.inner.lock();
         let inner = guard.as_ref().unwrap();
-        if let Some(mapping) = inner.mappings.iter().find(|map| map.contains(vaddr)) {
-            return Some(mapping.clone());
+        for idx, map in inner.mappings.iter() {
+            if map.contains(vaddr) {
+                return map.clone();
+            }
         }
+        /*if let Some(mapping) = inner.mappings.iter().find(|map| map.contains(vaddr)) {
+            return Some(mapping.clone());
+        }*/
         if let Some(child) = inner.children.iter().find(|ch| ch.contains(vaddr)) {
             return child.find_mapping(vaddr);
         }
@@ -643,7 +670,10 @@ impl VmAddressRegion {
     fn used_size(&self) -> usize {
         let mut guard = self.inner.lock();
         let inner = guard.as_mut().unwrap();
-        let map_size: usize = inner.mappings.iter().map(|map| map.size()).sum();
+        let map_size: usize = 0
+        for node in inner.mappings.iter_pre() {
+            map_size += node.borrow().value().size();
+        }
         let vmar_size: usize = inner.children.iter().map(|vmar| vmar.size).sum();
         map_size + vmar_size
     }
@@ -661,10 +691,12 @@ impl VmarInner {
         for child in src_inner.children.iter() {
             self.fork_from(child, page_table)?;
         }
-        for map in src_inner.mappings.iter() {
+        for node in src_inner.mappings.iter_pre() {
+            let node = node.borrow_mut().value();
             let mapping = map.clone_map(page_table.clone())?;
             mapping.map()?;
-            self.mappings.push(mapping);
+            self.mappings.insert(self.mapping_idx, mapping);
+            self.mapping_idx += 1;
         }
         Ok(())
     }
