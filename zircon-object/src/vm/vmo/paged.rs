@@ -178,12 +178,13 @@ impl VMObjectPaged {
     }
 
     /// Create a new VMO backing on contiguous pages.
-    pub fn new_contiguous(pages: usize, align_log2: usize) -> ZxResult<Arc<Self>> {
+    pub fn new_contiguous(pages: usize, align_log2: usize) -> ZxResult<(Arc<Self>, PhysAddr)> {
         let vmo = Self::new(pages);
         let mut frames = PhysFrame::new_contiguous(pages, align_log2 - PAGE_SIZE_LOG2);
         if frames.is_empty() {
             return Err(ZxError::NO_MEMORY);
         }
+        let base = frames[0].paddr();
         {
             let (_guard, mut inner) = vmo.get_inner_mut();
             inner.contiguous = true;
@@ -194,7 +195,7 @@ impl VMObjectPaged {
                 inner.frames.insert(i, state);
             }
         }
-        Ok(vmo)
+        Ok((vmo, base))
     }
 
     /// Internal: Wrap an inner struct to object.

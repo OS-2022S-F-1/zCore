@@ -1,6 +1,6 @@
 //! Probe devices and create drivers from device tree.
 //!
-//! Specification: <https://github.com/devicetree-org/devicetree-specification/releases/download/v0.3/devicetree-specification-v0.3.pdf>.
+//! Specification: <ssh://git@github.com/devicetree-org/devicetree-specification/releases/download/v0.3/devicetree-specification-v0.3.pdf>.
 
 use alloc::{collections::BTreeMap, sync::Arc, vec::Vec};
 
