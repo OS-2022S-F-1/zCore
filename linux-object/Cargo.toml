@@ -19,11 +19,11 @@ zircon-object = { path = "../zircon-object", features = ["elf"] }
 kernel-hal = { path = "../kernel-hal", default-features = false }
 downcast-rs = { version = "1.2", default-features = false }
 lazy_static = { version = "1.4", features = ["spin_no_std"] }
-rcore-fs = { path = "../rcore-fs/rcore-fs" }
-rcore-fs-sfs = { path = "../rcore-fs/rcore-fs-sfs" }
-rcore-fs-ramfs = { path = "../rcore-fs/rcore-fs-ramfs" }
-rcore-fs-mountfs = { path = "../rcore-fs/rcore-fs-mountfs" }
-rcore-fs-devfs = { path = "../rcore-fs/rcore-fs-devfs" }
+rcore-fs = { git = "ssh://git@github.com/rcore-os/rcore-fs", rev = "1a3246b", optional = true }
+rcore-fs-sfs = { git = "ssh://git@github.com/rcore-os/rcore-fs", rev = "1a3246b", optional = true }
+rcore-fs-ramfs = { git = "ssh://git@github.com/rcore-os/rcore-fs", rev = "1a3246b", optional = true }
+rcore-fs-mountfs = { git = "ssh://git@github.com/rcore-os/rcore-fs", rev = "1a3246b", optional = true }
+rcore-fs-devfs = { git = "ssh://git@github.com/rcore-os/rcore-fs", rev = "1a3246b", optional = true }
 cfg-if = "1.0"
 smoltcp = { git = "https://gitee.com/gcyyfun/smoltcp", rev = "043eb60", default-features = false, features = [
     "alloc",

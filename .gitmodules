@@ -4,9 +4,6 @@
 [submodule "tests"]
 	path = tests
 	url = ssh://git@github.com/rcore-os/zcore-tests.git
-[submodule "rcore-fs"]
-	path = rcore-fs
-	url = git@github.com:sunyt32/rcore-fs.git
 [submodule "linux-keystone-driver"]
 	path = linux-keystone-driver
 	url = git@github.com:keystone-enclave/linux-keystone-driver.git

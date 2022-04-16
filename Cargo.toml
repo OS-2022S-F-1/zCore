@@ -7,8 +7,7 @@ members = [
     "linux-object",
     "linux-syscall",
     "loader",
-    "zCore",
-    "rcore-fs/rcore-fs"
+    "zCore"
 ]
 
 exclude = [
