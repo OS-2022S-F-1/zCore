@@ -156,15 +156,16 @@ impl VmObject {
     }
 
     /// Create a VM object referring to a specific contiguous range of physical frame.  
-    pub fn new_contiguous(pages: usize, align_log2: usize) -> ZxResult<Arc<Self>> {
+    pub fn new_contiguous(pages: usize, align_log2: usize) -> ZxResult<(Arc<Self>, PhysAddr)> {
+        let (trait_, base) = VMObjectPaged::new_contiguous(pages, align_log2)?;
         let vmo = Arc::new(VmObject {
             base: KObjectBase::with_signal(Signal::VMO_ZERO_CHILDREN),
             resizable: false,
             _counter: CountHelper::new(),
-            trait_: VMObjectPaged::new_contiguous(pages, align_log2)?,
+            trait_,
             inner: Mutex::new(VmObjectInner::default()),
         });
-        Ok(vmo)
+        Ok((vmo, base))
     }
 
     /// Create a child VMO.

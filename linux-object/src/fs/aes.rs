@@ -1,7 +1,7 @@
 extern crate alloc;
 
 use alloc::vec::Vec;
-use linux_object::fs::matrix::{S, S2, COL, COL2, RCON};
+use super::matrix::{S, S2, COL, COL2, RCON};
 
 fn mul_field(mut a: u8, mut b: u8) -> u8 {
     let mut result: u8 = 0; //伽罗瓦域内乘法计算的结果

@@ -8,7 +8,7 @@ use spin::RwLock;
 
 use rcore_fs::vfs::{FileType, FsError, INode, Metadata, PollStatus};
 use zircon_object::object::*;
-use zircon_object::vm::{pages, VmObject};
+use zircon_object::vm::{pages, VmAddressRegion, VmObject};
 
 use super::FileLike;
 use crate::error::{LxError, LxResult};
@@ -330,7 +330,7 @@ impl FileLike for File {
         Ok(self.inner.read().inode.async_poll().await?)
     }
 
-    fn ioctl(&self, request: usize, arg1: usize, _arg2: usize, _arg3: usize) -> LxResult<usize> {
+    fn ioctl(&self, request: usize, vmar: Arc<VmAddressRegion>, arg1: usize, _arg2: usize, _arg3: usize) -> LxResult<usize> {
         // ioctl syscall
         self.inner.read().inode.io_control(request as u32, arg1)?;
         Ok(0)

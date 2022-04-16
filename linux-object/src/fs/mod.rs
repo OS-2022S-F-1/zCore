@@ -1,6 +1,7 @@
 //! Linux file objects
 
 mod devfs;
+mod keystone;
 mod file;
 mod ioctl;
 mod pipe;
@@ -37,6 +38,7 @@ pub use file::{File, OpenFlags, SeekFrom};
 pub use pipe::Pipe;
 pub use rcore_fs::vfs;
 pub use stdio::{STDIN, STDOUT};
+use zircon_object::vm::VmAddressRegion;
 
 #[async_trait]
 /// Generic file interface
@@ -64,7 +66,7 @@ pub trait FileLike: KernelObject {
     /// wait for some event on a file descriptor use async
     async fn async_poll(&self) -> LxResult<PollStatus>;
     /// manipulates the underlying device parameters of special files
-    fn ioctl(&self, request: usize, arg1: usize, arg2: usize, arg3: usize) -> LxResult<usize>;
+    fn ioctl(&self, request: usize, vmar: Arc<VmAddressRegion>, arg1: usize, arg2: usize, arg3: usize) -> LxResult<usize>;
     /// Returns the [`VmObject`] representing the file with given `offset` and `len`.
     fn get_vmo(&self, offset: usize, len: usize) -> LxResult<Arc<VmObject>>;
 }
