@@ -10,3 +10,9 @@
 [submodule "linux-user/keystone-sdk"]
 	path = linux-user/keystone-sdk
 	url = git@github.com:keystone-enclave/keystone-sdk.git
+[submodule "sm-rust"]
+	path = sm-rust
+	url = git@github.com:OS-2022S-F-1/sm-rust.git
+[submodule "sm"]
+	path = sm
+	url = git@github.com:keystone-enclave/sm.git
