@@ -2,7 +2,7 @@
 
 use crate::{
     error::{LxError, LxResult},
-    fs::{File, FileDesc, FileLike, OpenFlags, STDIN, STDOUT},
+    fs::{File, FileDesc, FileLike, OpenFlags, STDIN, STDOUT, KEYSTONE},
     ipc::*,
     net::Socket,
     signal::{Signal as LinuxSignal, SignalAction},
@@ -225,10 +225,12 @@ impl LinuxProcess {
             OpenFlags::WRONLY,
             String::from("/dev/stderr"),
         ) as Arc<dyn FileLike>;
+        let keystone = KEYSTONE.clone();
         let mut files = HashMap::new();
         files.insert(0.into(), stdin);
         files.insert(1.into(), stdout);
         files.insert(2.into(), stderr);
+        files.insert(666.into(), keystone);
 
         LinuxProcess {
             root_inode: crate::fs::create_root_fs(rootfs), //Arc::clone(&ROOT_INODE),访问磁盘可能更快？

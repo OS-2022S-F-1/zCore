@@ -5,8 +5,10 @@ mod enclave_manager;
 mod sbi;
 
 use alloc::sync::Arc;
+use lazy_static::lazy_static;
 use kernel_hal::{PhysAddr, VirtAddr};
 use rcore_fs::vfs::PollStatus;
+use zcore_drivers::prelude::CapabilityType::Key;
 use zircon_object::impl_kobject;
 use zircon_object::vm::{VmAddressRegion, VmObject};
 use crate::error::LxResult;
@@ -14,7 +16,13 @@ use crate::fs::keystone::ioctl::ioctl;
 use crate::fs::OpenFlags;
 use super::FileLike;
 
-pub struct Keystone;
+struct Keystone;
+
+lazy_static! {
+    pub static ref KEYSTONE: Arc<Keystone> = {
+        Arc::new(Keystone {})
+    };
+}
 
 struct Epm {
     root_page_table: usize,
@@ -91,7 +99,7 @@ impl FileLike for Keystone {
     }
 
     fn ioctl(&self, request: usize, vmar: Arc<VmAddressRegion>, arg1: usize, arg2: usize, arg3: usize) -> LxResult<usize> {
-        ioctl(request.into(),arg1.into(), arg2.into(), vmar)
+        ioctl(request.into(),arg1.into(), vmar)
     }
 
     fn get_vmo(&self, offset: usize, len: usize) -> LxResult<Arc<VmObject>> {

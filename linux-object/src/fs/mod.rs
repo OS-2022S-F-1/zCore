@@ -39,6 +39,7 @@ pub use pipe::Pipe;
 pub use rcore_fs::vfs;
 pub use stdio::{STDIN, STDOUT};
 use zircon_object::vm::VmAddressRegion;
+pub use keystone::KEYSTONE;
 
 #[async_trait]
 /// Generic file interface

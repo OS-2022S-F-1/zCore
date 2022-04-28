@@ -78,12 +78,12 @@ pub struct RunParams {
     value: usize
 }
 
-pub fn ioctl(cmd: Cmd, mut enclave_id: UserInOutPtr<usize>, mut base: UserInOutPtr<u8>, vmar: Arc<VmAddressRegion>) -> LxResult<usize>
+pub fn ioctl(cmd: Cmd, mut base: UserInOutPtr<u8>, vmar: Arc<VmAddressRegion>) -> LxResult<usize>
 {
     if let Ok(mut data) = base.read_array(cmd.ioc_size()) {
         let ret = match cmd.match_field() {
-            CREATE_ENCLAVE => { create_enclave(enclave_id, data.as_slice() as &mut CreateParams, vmar) }
-            DESTROY_ENCLAVE => { destroy_enclave(enclave_id, data.as_slice() as &CreateParams) }
+            CREATE_ENCLAVE => { create_enclave(data.as_slice() as &mut CreateParams, vmar) }
+            DESTROY_ENCLAVE => { destroy_enclave(data.as_slice() as &CreateParams) }
             RUN_ENCLAVE => { run_enclave(data.as_slice() as &mut RunParams) }
             RESUME_ENCLAVE => { resume_enclave(data.as_slice() as &mut RunParams) }
             FINALIZE_ENCLAVE => { finalize_enclave(data.as_slice() as &CreateParams) }
@@ -100,12 +100,11 @@ pub fn ioctl(cmd: Cmd, mut enclave_id: UserInOutPtr<usize>, mut base: UserInOutP
     }
 }
 
-fn create_enclave(mut enclave_id: UserInOutPtr<usize>, data: &mut CreateParams, vmar: Arc<VmAddressRegion>) -> LxResult<usize> {
+fn create_enclave(data: &mut CreateParams, vmar: Arc<VmAddressRegion>) -> LxResult<usize> {
     let enclave = Arc::new(Enclave::new(data.min_pages, vmar));
     data.pt_ptr = enclave.epm.root_page_table;
     data.epm_size = enclave.epm.size;
     data.eid = alloc(enclave)?;
-    enclave_id.write(data.eid);
     Ok(0)
 }
 
@@ -150,7 +149,6 @@ fn destroy_enclave(mut enclave_id: UserInOutPtr<usize>, data: &CreateParams) -> 
         remove_by_id(data.eid);
         if enclave.eid >= 0 {
             let ret = sbi_sm_destroy_enclave(enclave.eid);
-            enclave_id.write(0);
             if ret.error >= 0 {
                 error!("cannot destroy enclave: SBI failed with error code {}", ret.error);
                 Err(LxError::EINVAL)
