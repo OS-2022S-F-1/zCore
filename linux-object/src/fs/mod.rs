@@ -67,7 +67,7 @@ pub trait FileLike: KernelObject {
     /// wait for some event on a file descriptor use async
     async fn async_poll(&self) -> LxResult<PollStatus>;
     /// manipulates the underlying device parameters of special files
-    fn ioctl(&self, request: usize, vmar: Arc<VmAddressRegion>, arg1: usize, arg2: usize, arg3: usize) -> LxResult<usize>;
+    fn ioctl(&self, request: usize, arg1: usize, arg2: usize, arg3: usize) -> LxResult<usize>;
     /// Returns the [`VmObject`] representing the file with given `offset` and `len`.
     fn get_vmo(&self, offset: usize, len: usize) -> LxResult<Arc<VmObject>>;
 }

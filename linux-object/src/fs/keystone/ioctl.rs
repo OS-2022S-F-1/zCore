@@ -78,16 +78,16 @@ pub struct RunParams {
     value: usize
 }
 
-pub fn ioctl(cmd: Cmd, mut base: UserInOutPtr<u8>, vmar: Arc<VmAddressRegion>) -> LxResult<usize>
+pub fn ioctl(cmd: Cmd, mut base: UserInOutPtr<u8>) -> LxResult<usize>
 {
     if let Ok(mut data) = base.read_array(cmd.ioc_size()) {
         let ret = match cmd.match_field() {
-            CREATE_ENCLAVE => { create_enclave(data.as_slice() as &mut CreateParams, vmar) }
+            CREATE_ENCLAVE => { create_enclave(data.as_slice() as &mut CreateParams) }
             DESTROY_ENCLAVE => { destroy_enclave(data.as_slice() as &CreateParams) }
             RUN_ENCLAVE => { run_enclave(data.as_slice() as &mut RunParams) }
             RESUME_ENCLAVE => { resume_enclave(data.as_slice() as &mut RunParams) }
             FINALIZE_ENCLAVE => { finalize_enclave(data.as_slice() as &CreateParams) }
-            UTM_INIT => { utm_init_ioctl(data.as_slice() as &mut CreateParams, vmar) }
+            UTM_INIT => { utm_init_ioctl(data.as_slice() as &mut CreateParams) }
             _ => { Err(LxError::ENOSYS) }
         };
         if let Ok(_) = base.write_array(data.as_slice()) {
@@ -100,8 +100,8 @@ pub fn ioctl(cmd: Cmd, mut base: UserInOutPtr<u8>, vmar: Arc<VmAddressRegion>) -
     }
 }
 
-fn create_enclave(data: &mut CreateParams, vmar: Arc<VmAddressRegion>) -> LxResult<usize> {
-    let enclave = Arc::new(Enclave::new(data.min_pages, vmar));
+fn create_enclave(data: &mut CreateParams) -> LxResult<usize> {
+    let enclave = Arc::new(Enclave::new(data.min_pages));
     data.pt_ptr = enclave.epm.root_page_table;
     data.epm_size = enclave.epm.size;
     data.eid = alloc(enclave)?;
@@ -144,7 +144,7 @@ fn finalize_enclave(data: &CreateParams) -> LxResult<usize> {
     }
 }
 
-fn destroy_enclave(mut enclave_id: UserInOutPtr<usize>, data: &CreateParams) -> LxResult<usize> {
+fn destroy_enclave(data: &CreateParams) -> LxResult<usize> {
     if let Some(enclave) = get_enclave_by_id(data.eid) {
         remove_by_id(data.eid);
         if enclave.eid >= 0 {
@@ -195,9 +195,9 @@ fn resume_enclave(data: &mut RunParams) -> LxResult<usize> {
     }
 }
 
-fn utm_init_ioctl(data: &CreateParams, vmar: Arc<VmAddressRegion>) -> LxResult<usize> {
+fn utm_init_ioctl(data: &CreateParams) -> LxResult<usize> {
     if let Some(enclave) = get_enclave_by_id(data.eid) {
-        enclave.utm = Some(Utm::new(data.params.untrusted_size, vmar));
+        enclave.utm = Some(Utm::new(data.params.untrusted_size));
         Ok(0)
     } else {
         Err(LxError::EINVAL)

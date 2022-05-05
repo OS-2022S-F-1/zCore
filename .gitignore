@@ -12,4 +12,5 @@ zCore/src/platform/riscv/boot/kernel-vars.ld
 .idea
 .DS_Store
 .vscode/
+toolchain/
 __pycache__

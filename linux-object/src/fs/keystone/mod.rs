@@ -11,7 +11,8 @@ use rcore_fs::vfs::PollStatus;
 use zcore_drivers::prelude::CapabilityType::Key;
 use zircon_object::impl_kobject;
 use zircon_object::vm::{VmAddressRegion, VmObject};
-use crate::error::LxResult;
+use crate::error::{LxError, LxResult};
+use crate::fs::keystone::enclave_manager::get_enclave_by_id;
 use crate::fs::keystone::ioctl::ioctl;
 use crate::fs::OpenFlags;
 use super::FileLike;
@@ -25,21 +26,21 @@ lazy_static! {
 }
 
 struct Epm {
-    root_page_table: usize,
-    ptr: VirtAddr,
-    size: usize,
-    order: usize,
-    pa: PhysAddr,
-    vmar: Arc<VmAddressRegion>
+    // root_page_table: usize,
+    // ptr: VirtAddr,
+    pub size: usize,
+    pub order: usize,
+    pub pa: PhysAddr,
+    pub vmo: Arc<VmObject>
 }
 
 struct Utm {
-    root_page_table: usize,
-    ptr: VirtAddr,
-    size: usize,
-    order: usize,
-    pa: PhysAddr,
-    vmar: Arc<VmAddressRegion>
+    // root_page_table: usize,
+    // ptr: VirtAddr,
+    pub size: usize,
+    pub order: usize,
+    pub pa: PhysAddr,
+    pub vmo: Arc<VmObject>
 }
 
 struct Enclave {
@@ -98,12 +99,27 @@ impl FileLike for Keystone {
         })
     }
 
-    fn ioctl(&self, request: usize, vmar: Arc<VmAddressRegion>, arg1: usize, arg2: usize, arg3: usize) -> LxResult<usize> {
-        ioctl(request.into(),arg1.into(), vmar)
+    fn ioctl(&self, request: usize, arg1: usize, arg2: usize, arg3: usize) -> LxResult<usize> {
+        ioctl(request.into(),arg1.into())
     }
 
     fn get_vmo(&self, offset: usize, len: usize) -> LxResult<Arc<VmObject>> {
-        todo!()
+        let enclave_id = len >> 48;
+        let len = len & 0xffffffffff;
+        if let Some(enclave) = get_enclave_by_id(enclave_id) {
+            let vmo = if enclave.is_init {
+                enclave.epm?.vmo
+            } else {
+                enclave.utm?.vmo
+            };
+            if let Ok(child) = vmo.create_child(false, offset, len) {
+                Ok(child)
+            } else {
+                LxError::EINVAL
+            }
+        } else {
+            LxError::EINVAL
+        }
     }
 }
 
