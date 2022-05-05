@@ -19,7 +19,7 @@ pub struct ElfFile {
 
 impl ElfFile {
     pub unsafe fn new(filename: &str) -> Self {
-        let filep = libc::open(filename.as_ptr() as *const i8, libc::O_RDONLY);
+        let filep = libc::open(filename.as_ptr() as *const u8, libc::O_RDONLY);
 
         if filep < 0 {
             panic!("file does not exist - {}", filename);

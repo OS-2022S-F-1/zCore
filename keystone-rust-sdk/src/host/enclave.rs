@@ -1,5 +1,4 @@
-extern crate libc;
-
+use libc;
 use core::panicking::panic;
 use std::cmp::min;
 use std::mem::size_of;

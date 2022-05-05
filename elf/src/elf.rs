@@ -626,7 +626,9 @@ impl Elf {
     fn get_section_named(&self, str: *const u8, id: Option<&mut usize>) -> *const u8 {
         let num_sections = self.get_num_sections();
         for i in 0..num_sections {
-            if unsafe { libc::strcmp(str as *const i8, self.get_section_name(i) as *const i8) }== 0 {
+            // libc::c_char on different platform is defined differently
+            // on riscv64gc-unknown-linux-gnu type c_char = u8
+            if unsafe { libc::strcmp(str as *const u8, self.get_section_name(i) as *const u8) }== 0 {
                 if let Some(ret) = id {
                     *ret = i;
                 }

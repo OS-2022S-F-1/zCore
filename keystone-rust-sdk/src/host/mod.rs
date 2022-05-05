@@ -9,3 +9,7 @@ mod memory;
 mod physical_enclave_memory;
 mod simulated_enclave_memory;
 mod enclave;
+
+pub use error::Error;
+pub use params::Params;
+pub use enclave::{OCallFunc, Enclave};
