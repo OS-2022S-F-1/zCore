@@ -4,24 +4,37 @@ mod page;
 mod enclave_manager;
 mod sbi;
 
+use alloc::boxed::Box;
+use alloc::string::String;
+use async_trait::async_trait;
 use alloc::sync::Arc;
 use lazy_static::lazy_static;
-use kernel_hal::{PhysAddr, VirtAddr};
+use kernel_hal::{PhysAddr};
 use rcore_fs::vfs::PollStatus;
-use zcore_drivers::prelude::CapabilityType::Key;
+
 use zircon_object::impl_kobject;
-use zircon_object::vm::{VmAddressRegion, VmObject};
+use zircon_object::object::{KObjectBase, KoID, Signal};
+use zircon_object::vm::{VmObject};
+
 use crate::error::{LxError, LxResult};
-use crate::fs::keystone::enclave_manager::get_enclave_by_id;
+use crate::fs::keystone::enclave_manager::modify_enclave_by_id;
 use crate::fs::keystone::ioctl::ioctl;
 use crate::fs::OpenFlags;
 use super::FileLike;
 
-struct Keystone;
+/// Abstract fd for keystone driver
+pub struct Keystone {
+    base: KObjectBase,
+    path: String,
+}
 
 lazy_static! {
+    /// global fd
     pub static ref KEYSTONE: Arc<Keystone> = {
-        Arc::new(Keystone {})
+        Arc::new(Keystone {
+            base: KObjectBase::new(),
+            path: "/mnt/keystone".into()
+        })
     };
 }
 
@@ -43,43 +56,46 @@ struct Utm {
     pub vmo: Arc<VmObject>
 }
 
-struct Enclave {
-    eid: usize,
+pub struct Enclave {
+    eid: isize,
     close_on_pexit: i32,
-    utm: Option<Utm>, // untrusted share page
-    epm: Option<Epm>, // enclave private memory
+    utm: Utm, // untrusted share page
+    epm: Epm, // enclave private memory
     is_init: bool
 }
 
 impl_kobject!(Keystone);
 
+#[async_trait]
 impl FileLike for Keystone {
     fn flags(&self) -> OpenFlags {
         OpenFlags::RDWR
     }
 
-    fn set_flags(&self, f: OpenFlags) -> LxResult {
+    fn set_flags(&self, _f: OpenFlags) -> LxResult {
         Ok(())
     }
 
     fn dup(&self) -> Arc<dyn FileLike> {
-        Arc::new(Self {
+        Arc::new(Keystone {
+            base: KObjectBase::new(),
+            path: "/mnt/keystone".into()
         })
     }
 
-    async fn read(&self, buf: &mut [u8]) -> LxResult<usize> {
+    async fn read(&self, _buf: &mut [u8]) -> LxResult<usize> {
         Ok(0)
     }
 
-    fn write(&self, buf: &[u8]) -> LxResult<usize> {
+    fn write(&self, _buf: &[u8]) -> LxResult<usize> {
         Ok(0)
     }
 
-    async fn read_at(&self, offset: u64, buf: &mut [u8]) -> LxResult<usize> {
+    async fn read_at(&self, _offset: u64, _buf: &mut [u8]) -> LxResult<usize> {
         Ok(0)
     }
 
-    fn write_at(&self, offset: u64, buf: &[u8]) -> LxResult<usize> {
+    fn write_at(&self, _offset: u64, _buf: &[u8]) -> LxResult<usize> {
         Ok(0)
     }
 
@@ -99,27 +115,25 @@ impl FileLike for Keystone {
         })
     }
 
-    fn ioctl(&self, request: usize, arg1: usize, arg2: usize, arg3: usize) -> LxResult<usize> {
+    fn ioctl(&self, request: usize, arg1: usize, _arg2: usize, _arg3: usize) -> LxResult<usize> {
         ioctl(request.into(),arg1.into())
     }
 
     fn get_vmo(&self, offset: usize, len: usize) -> LxResult<Arc<VmObject>> {
         let enclave_id = len >> 48;
         let len = len & 0xffffffffff;
-        if let Some(enclave) = get_enclave_by_id(enclave_id) {
+        modify_enclave_by_id(enclave_id, |enclave| {
             let vmo = if enclave.is_init {
-                enclave.epm?.vmo
+                enclave.epm.vmo.clone()
             } else {
-                enclave.utm?.vmo
+                enclave.utm.vmo.clone()
             };
             if let Ok(child) = vmo.create_child(false, offset, len) {
                 Ok(child)
             } else {
-                LxError::EINVAL
+                Err(LxError::EINVAL)
             }
-        } else {
-            LxError::EINVAL
-        }
+        })
     }
 }
 

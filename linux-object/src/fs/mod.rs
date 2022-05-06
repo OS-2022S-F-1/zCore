@@ -9,8 +9,6 @@ mod pseudo;
 mod stdio;
 
 pub mod rcore_fs_wrapper;
-mod aes;
-mod matrix;
 
 use alloc::{boxed::Box, string::ToString, sync::Arc, vec::Vec};
 use core::convert::TryFrom;
@@ -32,13 +30,11 @@ use crate::error::{LxError, LxResult};
 use crate::process::LinuxProcess;
 use devfs::RandomINode;
 use pseudo::Pseudo;
-use aes::translate;
 
 pub use file::{File, OpenFlags, SeekFrom};
 pub use pipe::Pipe;
 pub use rcore_fs::vfs;
 pub use stdio::{STDIN, STDOUT};
-use zircon_object::vm::VmAddressRegion;
 pub use keystone::KEYSTONE;
 
 #[async_trait]

@@ -28,9 +28,18 @@ pub struct SbiCreate {
     pub runtime_params: RuntimeParams
 }
 
+impl From<u64> for Sbiret {
+    fn from(x: u64) -> Self {
+        Sbiret {
+            error: (x & ((1 << 32) - 1)) as i32,
+            value: (x >> 32) as i32
+        }
+    }
+}
+
 #[inline(always)]
-fn sbi_call(eid: usize, fid: usize, arg0: usize, arg1: usize, arg2: usize) -> Sbiret {
-    let ret;
+fn sbi_call(eid: usize, fid: usize, arg0: usize, arg1: usize, arg2: usize) -> u64 {
+    let ret: u64;
     unsafe {
         core::arch::asm!("ecall",
         in("a0") arg0,
@@ -40,29 +49,29 @@ fn sbi_call(eid: usize, fid: usize, arg0: usize, arg1: usize, arg2: usize) -> Sb
         in("a7") eid,
         lateout("a0") ret,
         );
-    }
+    };
     ret
 }
 
-pub fn sbi_sm_create_enclave(args: usize) -> Sbiret {
+pub fn sbi_sm_create_enclave(args: usize) -> u64 {
     sbi_call(KEYSTONE_SBI_EXT_ID,
     SBI_SM_CREATE_ENCLAVE,
     args, 0, 0)
 }
 
-pub fn sbi_sm_run_enclave(eid: usize) -> Sbiret {
+pub fn sbi_sm_run_enclave(eid: usize) -> u64 {
     sbi_call(KEYSTONE_SBI_EXT_ID,
     SBI_SM_RUN_ENCLAVE,
     eid, 0, 0)
 }
 
-pub fn sbi_sm_destroy_enclave(eid: usize) -> Sbiret {
+pub fn sbi_sm_destroy_enclave(eid: usize) -> u64 {
     sbi_call(KEYSTONE_SBI_EXT_ID,
     SBI_SM_DESTROY_ENCLAVE,
     eid, 0, 0)
 }
 
-pub fn sbi_sm_resume_enclave(eid: usize) -> Sbiret {
+pub fn sbi_sm_resume_enclave(eid: usize) -> u64 {
     sbi_call(KEYSTONE_SBI_EXT_ID,
     SBI_SM_RESUME_ENCLAVE,
     eid, 0, 0)

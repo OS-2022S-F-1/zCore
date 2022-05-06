@@ -1,7 +1,5 @@
-use alloc::sync::Arc;
-use kernel_hal::user::{Error, UserInOutPtr};
-use zircon_object::task::vmar;
-use zircon_object::vm::VmAddressRegion;
+use core::mem::size_of;
+use kernel_hal::user::{UserInOutPtr};
 use crate::error::{LxError, LxResult};
 use crate::fs::keystone::Utm;
 use super::enclave_manager::*;
@@ -9,15 +7,15 @@ use super::Enclave;
 use super::sbi::*;
 
 pub const IOC_MAGIC: usize = 0xa4 << 8;
-pub const CREATE_ENCLAVE: usize = IOC_MAGIC & 0x00;
-pub const DESTROY_ENCLAVE: usize = IOC_MAGIC & 0x01;
-pub const RUN_ENCLAVE: usize = IOC_MAGIC & 0x04;
-pub const RESUME_ENCLAVE: usize = IOC_MAGIC & 0x05;
-pub const FINALIZE_ENCLAVE: usize = IOC_MAGIC & 0x06;
-pub const UTM_INIT: usize = IOC_MAGIC & 0x07;
+pub const CREATE_ENCLAVE: usize = IOC_MAGIC | 0x00;
+pub const DESTROY_ENCLAVE: usize = IOC_MAGIC | 0x01;
+pub const RUN_ENCLAVE: usize = IOC_MAGIC | 0x04;
+pub const RESUME_ENCLAVE: usize = IOC_MAGIC | 0x05;
+pub const FINALIZE_ENCLAVE: usize = IOC_MAGIC | 0x06;
+pub const UTM_INIT: usize = IOC_MAGIC | 0x07;
 
 
-struct Cmd(pub usize);
+pub struct Cmd(pub usize);
 
 impl From<usize> for Cmd {
     fn from(x: usize) -> Self {
@@ -31,11 +29,11 @@ impl Cmd {
     }
 
     pub fn ioc_size(&self) -> usize {
-        return get_field(16, 29)
+        return self.get_field(16, 29)
     }
 
     pub fn ioc_type(&self) -> usize {
-        return get_field(8, 15)
+        return self.get_field(8, 15)
     }
 
     pub fn match_field(&self) -> usize {
@@ -78,38 +76,56 @@ pub struct RunParams {
     value: usize
 }
 
-pub fn ioctl(cmd: Cmd, mut base: UserInOutPtr<u8>) -> LxResult<usize>
-{
-    if let Ok(mut data) = base.read_array(cmd.ioc_size()) {
-        let ret = match cmd.match_field() {
-            CREATE_ENCLAVE => { create_enclave(data.as_slice() as &mut CreateParams) }
-            DESTROY_ENCLAVE => { destroy_enclave(data.as_slice() as &CreateParams) }
-            RUN_ENCLAVE => { run_enclave(data.as_slice() as &mut RunParams) }
-            RESUME_ENCLAVE => { resume_enclave(data.as_slice() as &mut RunParams) }
-            FINALIZE_ENCLAVE => { finalize_enclave(data.as_slice() as &CreateParams) }
-            UTM_INIT => { utm_init_ioctl(data.as_slice() as &mut CreateParams) }
-            _ => { Err(LxError::ENOSYS) }
-        };
-        if let Ok(_) = base.write_array(data.as_slice()) {
-            ret
-        } else {
+pub fn ioctl(cmd: Cmd, base: usize) -> LxResult<usize> {
+    match cmd.match_field() {
+        CREATE_ENCLAVE | DESTROY_ENCLAVE | FINALIZE_ENCLAVE | UTM_INIT => {
+            if cmd.ioc_size() >= size_of::<CreateParams>() {
+                let mut ptr: UserInOutPtr<CreateParams> = base.into();
+                if let Ok(mut data) = ptr.read() {
+                    let ret = match cmd.match_field() {
+                        CREATE_ENCLAVE => { create_enclave(&mut data) },
+                        DESTROY_ENCLAVE => { destroy_enclave(&data) },
+                        FINALIZE_ENCLAVE => { finalize_enclave(&data) },
+                        UTM_INIT => { utm_init_ioctl(&mut data) },
+                        _ => { Err(LxError::ENOSYS) }
+                    };
+                    if let Ok(_) = ptr.write(data) {
+                        return ret;
+                    }
+                }
+            }
+            Err(LxError::EFAULT)
+        },
+        RUN_ENCLAVE | RESUME_ENCLAVE => {
+            if cmd.ioc_size() >= size_of::<RunParams>() {
+                let mut ptr: UserInOutPtr<RunParams> = base.into();
+                if let Ok(mut data) = ptr.read() {
+                    let ret = match cmd.match_field() {
+                        RUN_ENCLAVE => { run_enclave(&mut data) },
+                        RESUME_ENCLAVE => { resume_enclave(&mut data) },
+                        _ => { Err(LxError::ENOSYS) }
+                    };
+                    if let Ok(_) = ptr.write(data) {
+                        return ret;
+                    }
+                }
+            }
             Err(LxError::EFAULT)
         }
-    } else {
-        Err(LxError::EFAULT)
+        _ => { Err(LxError::ENOSYS) }
     }
 }
 
 fn create_enclave(data: &mut CreateParams) -> LxResult<usize> {
-    let enclave = Arc::new(Enclave::new(data.min_pages));
-    data.pt_ptr = enclave.epm.root_page_table;
+    let enclave = Enclave::new(data.min_pages);
+    data.pt_ptr = enclave.epm.pa;
     data.epm_size = enclave.epm.size;
-    data.eid = alloc(enclave)?;
+    data.eid = alloc(enclave).unwrap();
     Ok(0)
 }
 
 fn finalize_enclave(data: &CreateParams) -> LxResult<usize> {
-    if let Some(enclave) = get_enclave_by_id(data.eid) {
+    if let Ok(_) = modify_enclave_by_id(data.eid, |enclave| {
         enclave.is_init = false;
         let sbi_create = SbiCreate {
             epm_region: SbiRegion {
@@ -130,25 +146,27 @@ fn finalize_enclave(data: &CreateParams) -> LxResult<usize> {
                 untrusted_size: 0
             }
         };
-        let ret = sbi_sm_create_enclave(sbi_create as *const SbiCreate as usize);
-        if ret.error != 0 {
-            remove_by_id(data.eid);
-            Err(LxError::EINVAL)
-        } else {
-            enclave.eid = ret.value as usize;
+        let ret: Sbiret = sbi_sm_create_enclave(&sbi_create as *const SbiCreate as usize).into();
+        if ret.error == 0 {
+            enclave.eid = ret.value as isize;
             Ok(0)
+        } else {
+            Err(LxError::EINVAL)
         }
+    }) {
+        Ok(0)
     } else {
         error!("Invalid enclave id");
+        remove_by_id(data.eid);
         Err(LxError::EINVAL)
     }
 }
 
 fn destroy_enclave(data: &CreateParams) -> LxResult<usize> {
-    if let Some(enclave) = get_enclave_by_id(data.eid) {
+    if let Ok(sbi_eid) = get_enclave_sbi_eid(data.eid) {
         remove_by_id(data.eid);
-        if enclave.eid >= 0 {
-            let ret = sbi_sm_destroy_enclave(enclave.eid);
+        if sbi_eid >= 0 {
+            let ret: Sbiret = sbi_sm_destroy_enclave(sbi_eid as usize).into();
             if ret.error >= 0 {
                 error!("cannot destroy enclave: SBI failed with error code {}", ret.error);
                 Err(LxError::EINVAL)
@@ -157,6 +175,7 @@ fn destroy_enclave(data: &CreateParams) -> LxResult<usize> {
             }
         } else {
             warn!("destroy_enclave: skipping");
+            Ok(0)
         }
     } else {
         Err(LxError::EINVAL)
@@ -164,25 +183,25 @@ fn destroy_enclave(data: &CreateParams) -> LxResult<usize> {
 }
 
 fn run_enclave(data: &mut RunParams) -> LxResult<usize> {
-    if let Some(enclave) = get_enclave_by_id(data.eid) {
-            if enclave.eid >= 0 {
-                let ret = sbi_sm_run_enclave(enclave.eid);
-                data.error = ret.error as usize;
-                data.value = ret.value as usize;
-                Ok(0)
-            } else {
-                error!("real enclave does not exist");
-                Err(LxError::EINVAL)
-            }
+    if let Ok(sbi_eid) = get_enclave_sbi_eid(data.eid) {
+        if sbi_eid >= 0 {
+            let ret: Sbiret = sbi_sm_run_enclave(sbi_eid as usize).into();
+            data.error = ret.error as usize;
+            data.value = ret.value as usize;
+            Ok(0)
+        } else {
+            error!("real enclave does not exist");
+            Err(LxError::EINVAL)
+        }
     } else {
         Err(LxError::EINVAL)
     }
 }
 
 fn resume_enclave(data: &mut RunParams) -> LxResult<usize> {
-    if let Some(enclave) = get_enclave_by_id(data.eid) {
-        if enclave.eid >= 0 {
-            let ret = sbi_sm_resume_enclave(enclave.eid);
+    if let Ok(sbi_eid) = get_enclave_sbi_eid(data.eid) {
+        if sbi_eid >= 0 {
+            let ret: Sbiret = sbi_sm_resume_enclave(sbi_eid as usize).into();
             data.error = ret.error as usize;
             data.value = ret.value as usize;
             Ok(0)
@@ -196,12 +215,10 @@ fn resume_enclave(data: &mut RunParams) -> LxResult<usize> {
 }
 
 fn utm_init_ioctl(data: &CreateParams) -> LxResult<usize> {
-    if let Some(enclave) = get_enclave_by_id(data.eid) {
-        enclave.utm = Some(Utm::new(data.params.untrusted_size));
+    modify_enclave_by_id(data.eid, |enclave| {
+        enclave.utm = Utm::new(data.params.untrusted_size);
         Ok(0)
-    } else {
-        Err(LxError::EINVAL)
-    }
+    })
 }
 
 

@@ -318,17 +318,16 @@ impl Syscall<'_> {
             "ioctl: fd={:?}, request={:#x}, args=[{:#x}, {:#x}, {:#x}]",
             fd, request, arg1, arg2, arg3
         );
-        let proc = self.zircon_process();
+        let proc = self.linux_process();
         // TODO wait a new struct to refactor
         if usize::from(fd) >= SOCKET_FD {
             let f = usize::from(fd);
-            let socket = proc.linux().get_socket(f.into())?;
+            let socket = proc.get_socket(f.into())?;
             let x = socket.lock();
             x.ioctl(request, arg1, arg2, arg3)
         } else {
-            let vmar = proc.vmar();
             let file_like = proc.get_file_like(fd)?;
-            file_like.ioctl(request, vmar, arg1, arg2, arg3)
+            file_like.ioctl(request, arg1, arg2, arg3)
         }
     }
 

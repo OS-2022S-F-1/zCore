@@ -16,3 +16,6 @@
 [submodule "sm"]
 	path = sm
 	url = git@github.com:keystone-enclave/sm.git
+[submodule "keystone-runtime"]
+	path = keystone-runtime
+	url = git@github.com:keystone-enclave/keystone-runtime.git
