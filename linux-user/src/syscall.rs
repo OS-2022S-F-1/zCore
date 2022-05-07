@@ -1,7 +1,5 @@
 use core::arch::asm;
 
-use super::{Stat, TimeVal};
-
 pub const SYSCALL_OPENAT: usize = 56;
 pub const SYSCALL_CLOSE: usize = 57;
 pub const SYSCALL_READ: usize = 63;
@@ -55,7 +53,7 @@ pub fn syscall6(id: usize, args: [usize; 6]) -> isize {
     ret
 }
 
-pub fn sys_openat(dirfd: usize, path: &str, flags: u32, mode: u32, key_ptr: *u8) -> isize {
+pub fn sys_openat(dirfd: usize, path: &str, flags: u32, mode: u32) -> isize {
     syscall6(
         SYSCALL_OPENAT,
         [
@@ -63,8 +61,8 @@ pub fn sys_openat(dirfd: usize, path: &str, flags: u32, mode: u32, key_ptr: *u8)
             path.as_ptr() as usize,
             flags as usize,
             mode as usize,
-            key_ptr as usize,
             0,
+            0
         ],
     )
 }
@@ -108,9 +106,6 @@ pub fn sys_unlinkat(dirfd: usize, path: &str, flags: usize) -> isize {
     syscall(SYSCALL_UNLINKAT, [dirfd, path.as_ptr() as usize, flags])
 }
 
-pub fn sys_fstat(fd: usize, st: &Stat) -> isize {
-    syscall(SYSCALL_FSTAT, [fd, st as *const _ as usize, 0])
-}
 
 pub fn sys_mail_read(buffer: &mut [u8]) -> isize {
     syscall(
@@ -135,9 +130,6 @@ pub fn sys_yield() -> isize {
     syscall(SYSCALL_YIELD, [0, 0, 0])
 }
 
-pub fn sys_get_time(time: &TimeVal, tz: usize) -> isize {
-    syscall(SYSCALL_GETTIMEOFDAY, [time as *const _ as usize, tz, 0])
-}
 
 pub fn sys_getpid() -> isize {
     syscall(SYSCALL_GETPID, [0, 0, 0])
