@@ -17,7 +17,7 @@ ROOTFS_URL := http://dl-cdn.alpinelinux.org/alpine/v3.12/releases/x86_64/$(ROOTF
 
 RISCV64_ROOTFS_TAR := prebuild.tar.xz
 RISCV64_ROOTFS_URL := https://github.com/rcore-os/libc-test-prebuilt/releases/download/0.1/$(RISCV64_ROOTFS_TAR)
-LIBC_TEST_URL := https://github.com/rcore-os/libc-test.git
+LIBC_TEST_URL := ssh://git@github.com/rcore-os/libc-test.git
 
 CROSS_TOOLCHAIN := http://musl.cc/riscv64-linux-musl-cross.tgz
 PATH := $(PATH):$(PWD)/toolchain/riscv64-linux-musl-cross/bin
@@ -72,7 +72,7 @@ rt-test:
 rcore-fs-fuse:
 ifneq ($(shell rcore-fs-fuse dir image git-version), $(rcore_fs_fuse_revision))
 	@echo Installing rcore-fs-fuse
-	@cargo install rcore-fs-fuse --git https://github.com/rcore-os/rcore-fs --rev $(rcore_fs_fuse_revision) --force
+	@cargo install rcore-fs-fuse --git ssh://git@github.com/rcore-os/rcore-fs --rev $(rcore_fs_fuse_revision) --force
 endif
 
 $(OUT_IMG): prebuilt/linux/$(ROOTFS_TAR) rcore-fs-fuse

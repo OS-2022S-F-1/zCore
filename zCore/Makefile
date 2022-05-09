@@ -3,7 +3,7 @@
 ARCH ?= riscv64
 PLATFORM ?= qemu
 MODE ?= release
-LOG ?= warn
+LOG ?= debug
 LINUX ?=
 LIBOS ?=
 TEST ?=
@@ -152,7 +152,7 @@ else ifeq ($(ARCH), riscv64)
   qemu_opts += \
 		-machine virt \
 		-bios default \
-		-m 512M \
+		-m 1024M \
 		-no-reboot \
 		-serial mon:stdio \
 		-serial file:/tmp/serial.out \

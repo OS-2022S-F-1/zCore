@@ -22,10 +22,10 @@ impl Syscall<'_> {
         sigsetsize: usize,
     ) -> SysResult {
         let signal = Signal::try_from(signum as u8).map_err(|_| LxError::EINVAL)?;
-        info!(
-            "rt_sigaction: signal={:?}, act={:?}, oldact={:?}, sigsetsize={}",
-            signal, act, oldact, sigsetsize
-        );
+        // info!(
+        //     "rt_sigaction: signal={:?}, act={:?}, oldact={:?}, sigsetsize={}",
+        //     signal, act, oldact, sigsetsize
+        // );
         if sigsetsize != core::mem::size_of::<Sigset>()
             || signal == Signal::SIGKILL
             || signal == Signal::SIGSTOP

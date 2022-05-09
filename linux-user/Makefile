@@ -2,12 +2,13 @@ TARGET := riscv64gc-unknown-linux-gnu
 MODE := release
 APP_DIR := src/bin
 TARGET_DIR := target/$(TARGET)/$(MODE)
-BUILD_DIR := ../riscv_rootfs/bin/test
+BUILD_DIR := ../riscv_rootfs/home/
 OBJDUMP := rust-objdump --arch-name=riscv64
 OBJCOPY := rust-objcopy --binary-architecture=riscv64
 PY := python3
 
 APPS := $(wildcard $(APP_DIR)/*.rs)
+APPS_C := $(wildcard $(APP_DIR)/*.c)
 ELFS := $(patsubst $(APP_DIR)/%.rs, $(TARGET_DIR)/%, $(APPS))
 
 elf: $(APPS)
@@ -20,13 +21,13 @@ binary: elf
 
 pre:
 	@mkdir -p $(BUILD_DIR)/bin/
-	@mkdir -p $(BUILD_DIR)/elf/
-	@mkdir -p $(BUILD_DIR)/app/
-	@$(foreach t, $(APPS), cp $(t) $(BUILD_DIR)/app/;)
 	
-build: clean pre binary 
-	@$(foreach t, $(ELFS), cp $(t).bin $(BUILD_DIR)/bin/;)
-	@$(foreach t, $(ELFS), cp $(t).elf $(BUILD_DIR)/elf/;)
+build: clean pre binary build_c
+	@$(foreach t, $(ELFS), cp $(t) $(BUILD_DIR)/bin/;)
+
+build_c:
+	@$(foreach t, $(APPS_C), riscv64-unknown-linux-gnu-gcc $(t) -static -o $(BUILD_DIR)/bin/$(subst .c, ,$(notdir $(t)));)
+
 
 clean:
 	@cargo clean
