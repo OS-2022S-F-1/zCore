@@ -14,6 +14,6 @@ fn main() {
     enclave.init(&*args.nth(1).unwrap(), &*args.nth(2).unwrap(), params, 0);
 
     let mut handler = EdgeCallHandler::init_internals(enclave.get_shared_buffer() as usize, enclave.get_shared_buffer_size());
-    enclave.register_ocall_dispatch(handler.incoming_call_dispatch);
+    enclave.register_ocall_handler(handler);
     enclave.run(&mut ret);
 }
