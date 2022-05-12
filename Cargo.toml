@@ -13,7 +13,8 @@ members = [
 
 exclude = [
     "zircon-user",
-    "rboot"
+    "rboot",
+    "linux-user"
 ]
 
 [profile.release]

@@ -26,7 +26,7 @@ build: clean pre binary build_c
 	@$(foreach t, $(ELFS), cp $(t) $(BUILD_DIR)/bin/;)
 
 build_c:
-	@$(foreach t, $(APPS_C), riscv64-unknown-linux-gnu-gcc $(t) -static -o $(BUILD_DIR)/bin/$(subst .c, ,$(notdir $(t)));)
+	@$(foreach t, $(APPS_C), riscv64-unknown-linux-gnu-gcc $(t) -static-libgcc -Wl,-Bstatic -o $(BUILD_DIR)/bin/$(subst .c, ,$(notdir $(t)));)
 
 
 clean:
