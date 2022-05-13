@@ -7,9 +7,6 @@
 [submodule "linux-keystone-driver"]
 	path = linux-keystone-driver
 	url = git@github.com:keystone-enclave/linux-keystone-driver.git
-[submodule "linux-user/keystone-sdk"]
-	path = linux-user/keystone-sdk
-	url = git@github.com:keystone-enclave/keystone-sdk.git
 [submodule "sm-rust"]
 	path = sm-rust
 	url = git@github.com:OS-2022S-F-1/sm-rust.git
@@ -19,3 +16,6 @@
 [submodule "keystone-runtime"]
 	path = keystone-runtime
 	url = git@github.com:keystone-enclave/keystone-runtime.git
+[submodule "linux-user/keystone-rust-sdk"]
+	path = linux-user/keystone-rust-sdk
+	url = git@github.com:OS-2022S-F-1/keystone-rust-sdk.git

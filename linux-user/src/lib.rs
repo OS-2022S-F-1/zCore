@@ -13,11 +13,15 @@ extern crate core;
 #[macro_use]
 extern crate bitflags;
 
+use alloc::string::String;
+use alloc::vec::Vec;
+use core::arch::asm;
+use core::str::Utf8Error;
 use buddy_system_allocator::LockedHeap;
 pub use console::{flush, STDIN, STDOUT};
 pub use syscall::*;
 
-const USER_HEAP_SIZE: usize = 16384;
+const USER_HEAP_SIZE: usize = 1 << 24;
 
 static mut HEAP_SPACE: [u8; USER_HEAP_SIZE] = [0; USER_HEAP_SIZE];
 
@@ -32,17 +36,21 @@ pub fn handle_alloc_error(layout: core::alloc::Layout) -> ! {
 #[no_mangle]
 #[link_section = ".text.entry"]
 pub extern "C" fn _start() -> ! {
+    let sp: u64;
     unsafe {
+        asm!("mv {}, sp", out(reg) sp);
         HEAP.lock()
             .init(HEAP_SPACE.as_ptr() as usize, USER_HEAP_SIZE);
     }
-    exit(main());
+    let args = args((sp + 80) as usize); // bug probably occurs!
+    exit(main(args));
 }
 
 #[linkage = "weak"]
 #[no_mangle]
-fn main() -> i32 {
+fn main(args: Vec<String>) -> i32 {
     panic!("Cannot find main!");
+    0
 }
 
 bitflags! {
@@ -235,4 +243,26 @@ pub fn dup(fd: usize) -> isize {
 }
 pub fn pipe(pipe_fd: &mut [usize]) -> isize {
     sys_pipe(pipe_fd)
+}
+
+// 从一个 C 风格的零结尾字符串构造一个字符切片。
+/// Forms a zero-terminated string slice from a user pointer to a c style string.
+fn as_c_str(ptr: usize) -> Result<&'static str, Utf8Error> {
+    let len = unsafe { (0usize..).find(|&i| *((ptr + i) as *const u8) == 0).unwrap() };
+    core::str::from_utf8(unsafe { core::slice::from_raw_parts(ptr as *const u8, len + 1) })
+}
+
+fn args(sp: usize) -> Vec<String> {
+    let ptr: Vec<usize> = unsafe {
+        let sp = sp as *mut usize;
+        let argc = *sp;
+        Vec::from_raw_parts(sp.add(1), argc, argc)
+    };
+    let mut result = Vec::new();
+    ptr.iter().for_each(|ptr| {
+        if let Ok(st) = as_c_str(*ptr) {
+            result.push(st.into());
+        }
+    });
+    result
 }

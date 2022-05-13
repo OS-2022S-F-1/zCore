@@ -77,6 +77,7 @@ pub struct RunParams {
 }
 
 pub fn ioctl(cmd: Cmd, base: usize) -> LxResult<usize> {
+    info!("Call keystone ioctl!");
     match cmd.match_field() {
         CREATE_ENCLAVE | DESTROY_ENCLAVE | FINALIZE_ENCLAVE | UTM_INIT => {
             if cmd.ioc_size() >= size_of::<CreateParams>() {
