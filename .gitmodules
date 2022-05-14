@@ -1,15 +1,6 @@
-[submodule "rboot"]
-	path = rboot
-	url = ssh://git@github.com/rcore-os/rboot.git
 [submodule "tests"]
 	path = tests
 	url = ssh://git@github.com/rcore-os/zcore-tests.git
-[submodule "linux-keystone-driver"]
-	path = linux-keystone-driver
-	url = git@github.com:keystone-enclave/linux-keystone-driver.git
-[submodule "sm-rust"]
-	path = sm-rust
-	url = git@github.com:OS-2022S-F-1/sm-rust.git
 [submodule "linux-user/keystone-rust-sdk"]
 	path = linux-user/keystone-rust-sdk
 	url = git@github.com:OS-2022S-F-1/keystone-rust-sdk.git
