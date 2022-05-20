@@ -59,7 +59,7 @@ kernel_elf := $(build_path)/zcore
 kernel_img := $(build_path)/zcore.bin
 esp := $(build_path)/esp
 ovmf := ../rboot/OVMF.fd
-qemu_disk := $(build_path)/disk.qcow2
+qemu_disk := $(build_path)/disk.qcocw2
 
 ifeq ($(shell uname), Darwin)
   sed := sed -i ""
@@ -206,13 +206,13 @@ test:
 debug: build
 	gdb --args $(kernel_elf) $(ARGS)
 else
-build: $(kernel_img)
+build: $(kernel_img) $(qemu_disk)
 run: build justrun
 debug: build debugrun
 endif
 
 .PHONY: justrun
-justrun: $(qemu_disk)
+justrun:
 ifeq ($(ARCH), x86_64)
 	$(sed) 's#initramfs=.*#initramfs=\\EFI\\zCore\\$(notdir $(user_img))#' $(esp)/EFI/Boot/rboot.conf
 	$(sed) 's#cmdline=.*#cmdline=$(CMDLINE)#' $(esp)/EFI/Boot/rboot.conf
@@ -220,7 +220,7 @@ endif
 	$(qemu) $(qemu_opts)
 
 .PHONY: debugrun
-debugrun: $(qemu_disk)
+debugrun:
 	$(qemu) $(qemu_opts) -s -S &
 	@sleep 1
 	gdb $(kernel_elf) -tui -x gdbinit

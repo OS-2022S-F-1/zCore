@@ -7,13 +7,11 @@ members = [
     "linux-object",
     "linux-syscall",
     "loader",
-    "zCore",
-    "sm-rust"
+    "zCore"
 ]
 
 exclude = [
     "zircon-user",
-    "rboot",
     "linux-user"
 ]
 
