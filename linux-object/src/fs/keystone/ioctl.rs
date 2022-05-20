@@ -25,15 +25,15 @@ impl From<usize> for Cmd {
 
 impl Cmd {
     fn get_field(&self, lo: usize, hi: usize) -> usize {
-        return (self.0 & (1 << (hi + 1) - 1)) >> lo
+        (self.0 & ((1 << hi + 1) - 1)) >> lo
     }
 
     pub fn ioc_size(&self) -> usize {
-        return self.get_field(16, 29)
+        self.get_field(16, 29)
     }
 
     pub fn ioc_type(&self) -> usize {
-        return self.get_field(8, 15)
+        self.get_field(8, 15)
     }
 
     pub fn match_field(&self) -> usize {
