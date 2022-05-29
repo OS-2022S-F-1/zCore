@@ -133,8 +133,7 @@ impl FileLike for Keystone {
             } else {
                 enclave.utm.frames.as_slice()
             };
-            let mut alloc_frames: Vec<PhysFrame> = Vec::with_capacity(align_len);
-            alloc_frames.clone_from_slice(&frames[offset..]);
+            let mut alloc_frames: Vec<PhysFrame> = Vec::from(&frames[offset..(offset + align_len)]);
             Ok(VmObject::new_with_frames(align_len, alloc_frames))
         })
     }
