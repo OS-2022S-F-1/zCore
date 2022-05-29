@@ -9,6 +9,16 @@ pub struct PhysFrame {
     allocated: bool,
 }
 
+impl Clone for PhysFrame {
+    fn clone(&self) -> Self {
+        Self {
+            paddr: self.paddr,
+            allocated: self.allocated
+        }
+    }
+}
+
+
 impl PhysFrame {
     /// Allocate one physical frame.
     pub fn new() -> Option<Self> {

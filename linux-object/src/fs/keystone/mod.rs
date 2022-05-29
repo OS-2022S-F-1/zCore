@@ -8,15 +8,18 @@ use alloc::boxed::Box;
 use alloc::string::String;
 use async_trait::async_trait;
 use alloc::sync::Arc;
+use alloc::vec::Vec;
+use core::mem::align_of;
 use lazy_static::lazy_static;
-use kernel_hal::{PhysAddr};
+use kernel_hal::{PAGE_SIZE, PhysAddr};
 use rcore_fs::vfs::PollStatus;
+use kernel_hal::mem::PhysFrame;
 
 use zircon_object::impl_kobject;
 use zircon_object::object::{KObjectBase, KoID, Signal};
 use zircon_object::vm::{VmObject};
 
-use crate::error::{LxError, LxResult};
+use crate::error::{LxResult};
 use crate::fs::keystone::enclave_manager::modify_enclave_by_id;
 use crate::fs::keystone::ioctl::ioctl;
 use crate::fs::OpenFlags;
@@ -44,7 +47,7 @@ struct Epm {
     pub size: usize,
     pub order: usize,
     pub pa: PhysAddr,
-    pub vmo: Arc<VmObject>
+    pub frames: Vec<PhysFrame>
 }
 
 struct Utm {
@@ -53,7 +56,7 @@ struct Utm {
     pub size: usize,
     pub order: usize,
     pub pa: PhysAddr,
-    pub vmo: Arc<VmObject>
+    pub frames: Vec<PhysFrame>
 }
 
 pub struct Enclave {
@@ -119,17 +122,21 @@ impl FileLike for Keystone {
         ioctl(request.into(),arg1.into())
     }
 
-    fn get_vmo(&self, enclave_id: usize, _: usize) -> LxResult<Arc<VmObject>> {
+    fn get_vmo(&self, offset: usize, len: usize) -> LxResult<Arc<VmObject>> {
         info!("Call keystone mmap!");
+        let enclave_id = len >> 48;
+        let align_len = len & ((1 << 48) - 1);
+        let offset = offset / PAGE_SIZE;
         modify_enclave_by_id(enclave_id, |enclave| {
-            let vmo = if enclave.is_init {
-                enclave.epm.vmo.clone()
+            let frames = if enclave.is_init {
+                enclave.epm.frames.as_slice()
             } else {
-                enclave.utm.vmo.clone()
+                enclave.utm.frames.as_slice()
             };
-            Ok(vmo)
+            let mut alloc_frames: Vec<PhysFrame> = Vec::with_capacity(align_len);
+            alloc_frames.clone_from_slice(&frames[offset..]);
+            Ok(VmObject::new_with_frames(align_len, alloc_frames))
         })
-
     }
 }
 

@@ -11,6 +11,7 @@ use {
     kernel_hal::CachePolicy,
     spin::Mutex,
 };
+use kernel_hal::mem::PhysFrame;
 
 mod paged;
 mod physical;
@@ -156,8 +157,8 @@ impl VmObject {
     }
 
     /// Create a VM object referring to a specific contiguous range of physical frame.  
-    pub fn new_contiguous(pages: usize, align_log2: usize) -> ZxResult<(Arc<Self>, PhysAddr)> {
-        let (trait_, base) = VMObjectPaged::new_contiguous(pages, align_log2)?;
+    pub fn new_contiguous(pages: usize, align_log2: usize) -> ZxResult<Arc<Self>> {
+        let trait_ = VMObjectPaged::new_contiguous(pages, align_log2)?;
         let vmo = Arc::new(VmObject {
             base: KObjectBase::with_signal(Signal::VMO_ZERO_CHILDREN),
             resizable: false,
@@ -165,7 +166,20 @@ impl VmObject {
             trait_,
             inner: Mutex::new(VmObjectInner::default()),
         });
-        Ok((vmo, base))
+        Ok(vmo)
+    }
+
+    /// Create a VM object referring to some existed physical frame.
+    pub fn new_with_frames(pages: usize, frames: Vec<PhysFrame>) -> Arc<Self> {
+        let trait_ = VMObjectPaged::new_with_frames(pages, frames);
+        let vmo = Arc::new(VmObject {
+            base: KObjectBase::with_signal(Signal::VMO_ZERO_CHILDREN),
+            resizable: false,
+            _counter: CountHelper::new(),
+            trait_,
+            inner: Mutex::new(VmObjectInner::default()),
+        });
+        vmo
     }
 
     /// Create a child VMO.

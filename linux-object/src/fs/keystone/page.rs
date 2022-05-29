@@ -1,5 +1,6 @@
 use kernel_hal::addr::{page_count};
-use zircon_object::vm::{PAGE_SIZE, VmObject};
+use kernel_hal::mem::PhysFrame;
+use zircon_object::vm::{PAGE_SIZE};
 use super::{Epm, Utm};
 
 fn log2(mut x: usize) -> usize {
@@ -13,16 +14,16 @@ fn log2(mut x: usize) -> usize {
 
 impl Epm {
     pub fn new(min_pages: usize) -> Self {
-        let order = unsafe { log2(min_pages) } as usize + 1;
+        let order = log2(min_pages) + 1;
         let count = 1 << order;
-        let (vmo, device_phys_addr) = VmObject::new_contiguous(count, order).unwrap();
+        let frames = PhysFrame::new_contiguous(count, order);
         Epm {
             // root_page_table: epm_vaddr,
             // ptr: epm_vaddr,
             size: count * PAGE_SIZE,
             order,
-            pa: device_phys_addr,
-            vmo
+            pa: frames[0].paddr().into(),
+            frames
         }
     }
 }
@@ -30,16 +31,16 @@ impl Epm {
 impl Utm {
     pub fn new(untrusted_size: usize) -> Self {
         let min_pages = page_count(untrusted_size);
-        let order = unsafe { log2(min_pages) } as usize + 1;
+        let order = log2(min_pages) + 1;
         let count = 1 << order;
-        let (vmo, device_phys_addr) = VmObject::new_contiguous(count, order).unwrap();
+        let frames = PhysFrame::new_contiguous(count, order);
         Utm {
             // root_page_table: epm_vaddr,
             // ptr: epm_vaddr,
             size: count * PAGE_SIZE,
             order,
-            pa: device_phys_addr,
-            vmo
+            pa: frames[0].paddr().into(),
+            frames
         }
     }
 }

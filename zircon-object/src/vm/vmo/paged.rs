@@ -178,24 +178,28 @@ impl VMObjectPaged {
     }
 
     /// Create a new VMO backing on contiguous pages.
-    pub fn new_contiguous(pages: usize, align_log2: usize) -> ZxResult<(Arc<Self>, PhysAddr)> {
-        let vmo = Self::new(pages);
-        let mut frames = PhysFrame::new_contiguous(pages, align_log2 - PAGE_SIZE_LOG2);
+    pub fn new_contiguous(pages: usize, align_log2: usize) -> ZxResult<Arc<Self>> {
+        let frames = PhysFrame::new_contiguous(pages, align_log2 - PAGE_SIZE_LOG2);
         if frames.is_empty() {
             return Err(ZxError::NO_MEMORY);
         }
-        let base = frames[0].paddr();
-        {
-            let (_guard, mut inner) = vmo.get_inner_mut();
-            inner.contiguous = true;
-            for (i, f) in frames.drain(0..).enumerate() {
-                kernel_hal::mem::pmem_zero(f.paddr(), PAGE_SIZE);
-                let mut state = PageState::new(f);
-                state.pin_count += 1;
-                inner.frames.insert(i, state);
-            }
+        let vmo = VMObjectPaged::new_with_frames(pages, frames);
+        Ok(vmo)
+    }
+
+    pub fn new_with_frames(pages: usize, mut frames: Vec<PhysFrame>) -> Arc<Self> {
+        let vmo = Self::new(pages);
+        let (_guard, mut inner) = vmo.get_inner_mut();
+        inner.contiguous = true;
+        for (i, f) in frames.drain(0..).enumerate() {
+            kernel_hal::mem::pmem_zero(f.paddr(), PAGE_SIZE);
+            let mut state = PageState::new(f);
+            state.pin_count += 1;
+            inner.frames.insert(i, state);
         }
-        Ok((vmo, base))
+        drop(_guard);
+        drop(inner);
+        vmo
     }
 
     /// Internal: Wrap an inner struct to object.

@@ -1,3 +1,4 @@
+use alloc::vec::Vec;
 use super::{Enclave, Epm, Utm};
 
 
@@ -13,7 +14,7 @@ impl Enclave {
                 size: 0,
                 order: 0,
                 pa: 0,
-                vmo: epm.vmo.clone()
+                frames: Vec::new()
             },
             epm,
             is_init: true
