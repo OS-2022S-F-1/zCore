@@ -119,22 +119,17 @@ impl FileLike for Keystone {
         ioctl(request.into(),arg1.into())
     }
 
-    fn get_vmo(&self, offset: usize, len: usize) -> LxResult<Arc<VmObject>> {
+    fn get_vmo(&self, enclave_id: usize, _: usize) -> LxResult<Arc<VmObject>> {
         info!("Call keystone mmap!");
-        let enclave_id = len >> 48;
-        let len = len & ((1 << 48) - 1);
         modify_enclave_by_id(enclave_id, |enclave| {
             let vmo = if enclave.is_init {
                 enclave.epm.vmo.clone()
             } else {
                 enclave.utm.vmo.clone()
             };
-            if let Ok(child) = vmo.create_child(false, offset, len) {
-                Ok(child)
-            } else {
-                Err(LxError::EINVAL)
-            }
+            Ok(vmo)
         })
+
     }
 }
 
