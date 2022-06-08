@@ -168,7 +168,7 @@ fn destroy_enclave(data: &CreateParams) -> LxResult<usize> {
         remove_by_id(data.eid);
         if sbi_eid >= 0 {
             let ret: Sbiret = sbi_sm_destroy_enclave(sbi_eid as usize).into();
-            if ret.error >= 0 {
+            if ret.error > 0 {
                 error!("cannot destroy enclave: SBI failed with error code {}", ret.error);
                 Err(LxError::EINVAL)
             } else {
