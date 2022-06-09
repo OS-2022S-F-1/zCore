@@ -28,5 +28,9 @@ SECTIONS
     /DISCARD/ : {
         *(.eh_frame)
         *(.debug*)
+        *(.riscv.attributes)
+        *(.comment)
+        *(.symtab)
+        *(.strtab)
     }
 }
