@@ -82,7 +82,7 @@ impl Syscall<'_> {
     ) -> SysResult {
         let prot = MmapProt::from_bits_truncate(prot);
         let flags = MmapFlags::from_bits_truncate(flags);
-        info!(
+        trace!(
             "mmap: addr={:#x}, size={:#x}, prot={:?}, flags={:?}, fd={:?}, offset={:#x}",
             addr, len, prot, flags, fd, offset
         );

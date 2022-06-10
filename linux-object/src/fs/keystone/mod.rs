@@ -123,7 +123,6 @@ impl FileLike for Keystone {
     }
 
     fn get_vmo(&self, offset: usize, len: usize) -> LxResult<Arc<VmObject>> {
-        info!("Call keystone mmap!");
         let enclave_id = len >> 48;
         let align_len = len & ((1 << 48) - 1);
         let offset = offset / PAGE_SIZE;

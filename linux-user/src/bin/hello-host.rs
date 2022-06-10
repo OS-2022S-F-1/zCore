@@ -21,14 +21,13 @@ fn main(args: Vec<String>) -> i32 {
     let elf_data = ElfData::new(args.get(1).unwrap().as_str(), args.get(2).unwrap().as_str());
     println!("Get elf data successfully!");
     let mut enclave = Enclave::new(&elf_data, params, 0).unwrap();
-    println!("Enclave created");
-
-
+    println!("Enclave created!");
     let mut handler = EdgeCallHandler::init_internals(enclave.get_shared_buffer() as usize, enclave.get_shared_buffer_size());
     handler.register_call(8, move |_: *mut u8| {
         println!("ocall from enclave!");
     });
     enclave.register_ocall_handler(handler);
+    println!("Prepared to run...");
     enclave.run(&mut ret);
     0
 }

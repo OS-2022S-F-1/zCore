@@ -1,4 +1,3 @@
-BITS = 64
 CROSS_COMPILE = riscv$(BITS)-unknown-linux-gnu-
 CC = $(CROSS_COMPILE)gcc
 OBJCOPY = $(CROSS_COMPILE)objcopy

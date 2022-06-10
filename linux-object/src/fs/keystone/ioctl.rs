@@ -77,7 +77,6 @@ pub struct RunParams {
 }
 
 pub fn ioctl(cmd: Cmd, base: usize) -> LxResult<usize> {
-    info!("Call keystone ioctl!");
     match cmd.match_field() {
         CREATE_ENCLAVE | DESTROY_ENCLAVE | FINALIZE_ENCLAVE | UTM_INIT => {
             if cmd.ioc_size() >= size_of::<CreateParams>() {
@@ -118,10 +117,12 @@ pub fn ioctl(cmd: Cmd, base: usize) -> LxResult<usize> {
 }
 
 fn create_enclave(data: &mut CreateParams) -> LxResult<usize> {
+    info!("Create enclave start...");
     let enclave = Enclave::new(data.min_pages);
     data.pt_ptr = enclave.epm.pa;
     data.epm_size = enclave.epm.size;
     data.eid = alloc(enclave).unwrap();
+    info!("Create enclave successfully");
     Ok(0)
 }
 
@@ -141,12 +142,13 @@ fn finalize_enclave(data: &CreateParams) -> LxResult<usize> {
             user_paddr: data.user_paddr,
             free_paddr: data.free_paddr,
             runtime_params: RuntimeParams {
-                runtime_entry: 0,
-                user_entry: 0,
-                untrusted_ptr: 0,
-                untrusted_size: 0
+                runtime_entry: data.runtime_vaddr,
+                user_entry: data.user_vaddr,
+                untrusted_ptr: data.utm_free_ptr,
+                untrusted_size: data.utm_size
             }
         };
+        warn!("Runtime entry: {:x}", data.runtime_vaddr);
         let ret: Sbiret = sbi_sm_create_enclave(&sbi_create as *const SbiCreate as usize).into();
         if ret.error == 0 {
             enclave.eid = ret.value as isize;

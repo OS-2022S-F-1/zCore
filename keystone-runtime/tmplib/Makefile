@@ -1,4 +1,3 @@
-BITS = 64
 CC = riscv$(BITS)-unknown-linux-gnu-gcc
 CFLAGS = -Wall -Werror -fPIC -I.
 
