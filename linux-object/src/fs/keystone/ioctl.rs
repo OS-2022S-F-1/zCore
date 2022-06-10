@@ -142,13 +142,13 @@ fn finalize_enclave(data: &CreateParams) -> LxResult<usize> {
             user_paddr: data.user_paddr,
             free_paddr: data.free_paddr,
             runtime_params: RuntimeParams {
-                runtime_entry: data.runtime_vaddr,
-                user_entry: data.user_vaddr,
-                untrusted_ptr: data.utm_free_ptr,
-                untrusted_size: data.utm_size
+                runtime_entry: data.params.runtime_entry,
+                user_entry: data.params.user_entry,
+                untrusted_ptr: data.params.untrusted_ptr,
+                untrusted_size: data.params.untrusted_size
             }
         };
-        warn!("Runtime entry: {:x}", data.runtime_vaddr);
+        warn!("Runtime entry: {:x}", data.params.runtime_entry);
         let ret: Sbiret = sbi_sm_create_enclave(&sbi_create as *const SbiCreate as usize).into();
         if ret.error == 0 {
             enclave.eid = ret.value as isize;
