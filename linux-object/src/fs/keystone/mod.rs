@@ -124,23 +124,16 @@ impl FileLike for Keystone {
 
     fn get_vmo(&self, offset: usize, len: usize) -> LxResult<Arc<VmObject>> {
         let enclave_id = len >> 48;
-        // let align_len = len & ((1 << 48) - 1);
-        // let offset = offset / PAGE_SIZE;
+        let align_len = len & ((1 << 48) - 1);
+        let offset = offset / PAGE_SIZE;
         modify_enclave_by_id(enclave_id, |enclave| {
             let frames = if enclave.is_init {
-                enclave.epm.frames.as_mut_slice()
+                enclave.epm.frames.as_slice()
             } else {
-                enclave.utm.frames.as_mut_slice()
+                enclave.utm.frames.as_slice()
             };
-            let mut alloc_frames: Vec<PhysFrame> = Vec::new();
-            for phys_frame in frames.iter_mut() {
-                if !phys_frame.allocated {
-                    alloc_frames.push(phys_frame.clone());
-                    phys_frame.allocated = true;
-                    break;
-                }
-            }
-            Ok(VmObject::new_with_frames(1, alloc_frames))
+            let mut alloc_frames: Vec<PhysFrame> = Vec::from(&frames[offset..(offset + align_len)]);
+            Ok(VmObject::new_with_frames(align_len, alloc_frames))
         })
     }
 }
