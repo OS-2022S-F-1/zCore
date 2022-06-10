@@ -97,7 +97,7 @@ riscv-image: rcore-fs-fuse riscv-rootfs
 #	@cd riscv_rootfs &&  git clone $(LIBC_TEST_URL) --depth 1
 #	@cd riscv_rootfs/libc-test && cp config.mak.def config.mak && make ARCH=riscv64 CROSS_COMPILE=riscv64-linux-musl- -j
 #	@cd riscv_rootfs && cp libc-test-prebuild/functional/tls_align-static.exe libc-test/src/functional/
-	@cd linux-user && make build
+	@cd linux-user && make build ENV=host && make build ENV=app
 	@cp keystone-runtime/eyrie-rt ./riscv_rootfs/home/bin
 	@rcore-fs-fuse zCore/riscv64.img riscv_rootfs zip
 	@qemu-img resize -f raw zCore/riscv64.img +5M

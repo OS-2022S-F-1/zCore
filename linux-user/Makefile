@@ -1,7 +1,8 @@
 TARGET := riscv64gc-unknown-none-elf
 MODE := release
-APP_DIR := src/bin
-TARGET_DIR := target/$(TARGET)/$(MODE)
+ENV := host
+APP_DIR := $(ENV)/src/bin
+TARGET_DIR := $(ENV)/target/$(TARGET)/$(MODE)
 BUILD_DIR := ../riscv_rootfs/home/bin
 OBJDUMP := rust-objdump --arch-name=riscv64
 OBJCOPY := rust-objcopy --binary-architecture=riscv64
@@ -16,7 +17,7 @@ endif
 ELFS := $(patsubst $(APP_DIR)/%.rs, $(TARGET_DIR)/%, $(APPS))
 
 elf: $(APPS)
-	@cargo build --release
+	@cd $(ENV) && cargo build --release
 
 binary: elf
 	@$(foreach elf, $(ELFS), \
@@ -31,6 +32,5 @@ build: clean pre binary
 
 clean:
 	@cargo clean
-	@rm -rf $(BUILD_DIR)
 
 .PHONY: elf binary build clean

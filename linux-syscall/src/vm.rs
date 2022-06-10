@@ -92,7 +92,7 @@ impl Syscall<'_> {
 
         if flags.contains(MmapFlags::FIXED) {
             // unmap first
-            vmar.unmap(addr, len)?;
+            vmar.unmap(addr, if usize::from(fd) == 666 { len & ((1 << 48) - 1) } else { len })?;
         }
         let vmar_offset = flags.contains(MmapFlags::FIXED).then(|| addr - vmar.addr());
         if flags.contains(MmapFlags::ANONYMOUS) {
