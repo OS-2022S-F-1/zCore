@@ -5,8 +5,8 @@ use crate::{PhysAddr, KHANDLER, PAGE_SIZE};
 /// A 4K size physical frame.
 #[derive(Debug)]
 pub struct PhysFrame {
-    paddr: PhysAddr,
-    allocated: bool,
+    pub paddr: PhysAddr,
+    pub allocated: bool,
 }
 
 impl Clone for PhysFrame {

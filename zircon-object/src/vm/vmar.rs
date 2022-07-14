@@ -69,14 +69,14 @@ impl VmAddressRegion {
     /// Create a new root VMAR.
     pub fn new_root() -> Arc<Self> {
         #[cfg(feature = "aspace-separate")]
-        let (addr, size) = {
+            let (addr, size) = {
             use core::sync::atomic::*;
             static VMAR_ID: AtomicUsize = AtomicUsize::new(0);
             let i = VMAR_ID.fetch_add(1, Ordering::SeqCst);
             (0x2_0000_0000 + 0x100_0000_0000 * i, 0x100_0000_0000)
         };
         #[cfg(not(feature = "aspace-separate"))]
-        let (addr, size) = (USER_ASPACE_BASE as usize, USER_ASPACE_SIZE as usize);
+            let (addr, size) = (USER_ASPACE_BASE as usize, USER_ASPACE_SIZE as usize);
         Arc::new(VmAddressRegion {
             flags: VmarFlags::ROOT_FLAGS,
             base: KObjectBase::new(),
@@ -85,6 +85,20 @@ impl VmAddressRegion {
             size,
             parent: None,
             page_table: Arc::new(Mutex::new(PageTable::from_current().clone_kernel())), //hal PageTable
+            inner: Mutex::new(Some(VmarInner::default())),
+        })
+    }
+
+    pub fn new_root_with_pt(pt: Arc<Mutex<dyn GenericPageTable>>) -> Arc<Self> {
+        let (addr, size) = (USER_ASPACE_BASE as usize, USER_ASPACE_SIZE as usize);
+        Arc::new(VmAddressRegion {
+            flags: VmarFlags::ROOT_FLAGS,
+            base: KObjectBase::new(),
+            _counter: CountHelper::new(),
+            addr,
+            size,
+            parent: None,
+            page_table: pt, //hal PageTable
             inner: Mutex::new(Some(VmarInner::default())),
         })
     }

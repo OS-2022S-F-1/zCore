@@ -92,6 +92,7 @@ impl Syscall<'_> {
 
         if flags.contains(MmapFlags::FIXED) {
             // unmap first
+            warn!("Begin to unmap {} {}...", usize::from(fd), len & ((1 << 48) - 1));
             vmar.unmap(addr, if usize::from(fd) == 666 { len & ((1 << 48) - 1) } else { len })?;
         }
         let vmar_offset = flags.contains(MmapFlags::FIXED).then(|| addr - vmar.addr());
@@ -105,7 +106,9 @@ impl Syscall<'_> {
         } else {
             let file_like = self.linux_process().get_file_like(fd)?;
             let vmo = file_like.get_vmo(offset as usize, len)?;
+            warn!("Begin to map...");
             let addr = vmar.map(vmar_offset, vmo.clone(), 0, vmo.len(), prot.to_flags())?;
+            warn!("Get address {:x}", addr);
             Ok(addr)
         }
     }

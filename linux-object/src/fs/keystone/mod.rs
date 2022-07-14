@@ -3,6 +3,7 @@ mod enclave;
 mod page;
 mod enclave_manager;
 mod sbi;
+mod elf_loader;
 
 use alloc::boxed::Box;
 use alloc::string::String;
@@ -13,13 +14,14 @@ use core::mem::align_of;
 use lazy_static::lazy_static;
 use kernel_hal::{PAGE_SIZE, PhysAddr};
 use rcore_fs::vfs::PollStatus;
+use spin::Mutex;
 use kernel_hal::mem::PhysFrame;
 
-use zircon_object::impl_kobject;
+use zircon_object::{impl_kobject, ZxError};
 use zircon_object::object::{KObjectBase, KoID, Signal};
-use zircon_object::vm::{VmObject};
+use zircon_object::vm::{VmAddressRegion, VmObject};
 
-use crate::error::{LxResult};
+use crate::error::{LxError, LxResult};
 use crate::fs::keystone::enclave_manager::modify_enclave_by_id;
 use crate::fs::keystone::ioctl::ioctl;
 use crate::fs::OpenFlags;
@@ -41,7 +43,7 @@ lazy_static! {
     };
 }
 
-struct Epm {
+struct MemoryRegion {
     // root_page_table: usize,
     // ptr: VirtAddr,
     pub size: usize,
@@ -50,20 +52,13 @@ struct Epm {
     pub frames: Vec<PhysFrame>
 }
 
-struct Utm {
-    // root_page_table: usize,
-    // ptr: VirtAddr,
-    pub size: usize,
-    pub order: usize,
-    pub pa: PhysAddr,
-    pub frames: Vec<PhysFrame>
-}
 
 pub struct Enclave {
     eid: isize,
     close_on_pexit: i32,
-    utm: Utm, // untrusted share page
-    epm: Epm, // enclave private memory
+    utm: Arc<Mutex<MemoryRegion>>, // untrusted share page
+    epm: Arc<Mutex<MemoryRegion>>, // enclave private memory
+    vmar: Arc<VmAddressRegion>,
     is_init: bool
 }
 
@@ -124,16 +119,21 @@ impl FileLike for Keystone {
 
     fn get_vmo(&self, offset: usize, len: usize) -> LxResult<Arc<VmObject>> {
         let enclave_id = len >> 48;
-        let align_len = len & ((1 << 48) - 1);
+        let align_len = (len & ((1 << 48) - 1)) / PAGE_SIZE;
         let offset = offset / PAGE_SIZE;
         modify_enclave_by_id(enclave_id, |enclave| {
-            let frames = if enclave.is_init {
-                enclave.epm.frames.as_slice()
+            let memory = if enclave.is_init {
+                enclave.epm.clone()
             } else {
-                enclave.utm.frames.as_slice()
+                enclave.utm.clone()
             };
-            let mut alloc_frames: Vec<PhysFrame> = Vec::from(&frames[offset..(offset + align_len)]);
-            Ok(VmObject::new_with_frames(align_len, alloc_frames))
+            if offset > memory.frames.len() || offset + align_len > memory.frames.len() {
+                Err(LxError::EINVAL)
+            } else {
+                let mut alloc_frames: Vec<PhysFrame> = Vec::from(&memory.frames[offset..(offset + align_len)]);
+                Ok(VmObject::new_with_frames(align_len, alloc_frames))
+            }
+
         })
     }
 }

@@ -50,7 +50,7 @@ impl VmarExt for VmAddressRegion {
     }
 }
 
-trait FlagsExt {
+pub trait FlagsExt {
     fn to_mmu_flags(&self) -> MMUFlags;
 }
 

@@ -1,6 +1,14 @@
+use alloc::sync::Arc;
 use core::mem::size_of;
-use kernel_hal::user::{UserInOutPtr};
+use core::slice::SliceIndex;
+use xmas_elf::ElfFile;
+use kernel_hal::addr::page_count;
+use kernel_hal::user::{UserInOutPtr, UserInPtr};
+use zircon_object::task::IntoResult;
+use zircon_object::util::elf_loader::{ElfExt, VmarExt};
+use zircon_object::vm::{PAGE_SIZE, VmarFlags};
 use crate::error::{LxError, LxResult};
+use crate::fs::keystone::elf_loader::EnclaveVmar;
 use crate::fs::keystone::Utm;
 use super::enclave_manager::*;
 use super::Enclave;
@@ -52,9 +60,12 @@ pub struct CreateParams {
      eid: usize,
     //Min pages required
      min_pages: usize,
-    // virtual addresses
+    // Used for load elf and write page table
      runtime_vaddr: usize,
+     runtime_size: usize,
      user_vaddr: usize,
+     user_size: usize,
+
      pt_ptr: usize,
      utm_free_ptr: usize,
     //Used for hash
@@ -116,12 +127,34 @@ pub fn ioctl(cmd: Cmd, base: usize) -> LxResult<usize> {
     }
 }
 
-fn create_enclave(data: &mut CreateParams) -> LxResult<usize> {
+fn create_enclave(params: &mut CreateParams) -> LxResult<usize> {
     info!("Create enclave start...");
-    let enclave = Enclave::new(data.min_pages);
-    data.pt_ptr = enclave.epm.pa;
-    data.epm_size = enclave.epm.size;
-    data.eid = alloc(enclave).unwrap();
+    let enclave = Enclave::new(params.min_pages);
+    params.pt_ptr = enclave.epm.pa;
+    params.epm_size = enclave.epm.size;
+    params.eid = alloc(enclave).unwrap();
+    let mut runtime_ptr: UserInPtr<u8> = params.runtime_vaddr.into();
+    if let Ok(mut data) = runtime_ptr.read_array(params.runtime_size) {
+        let elf = ElfFile::new(data.as_slice()).map_err(|_| Err(LxError::EFAULT))?;
+        let size = elf.load_segment_size();
+        let image_vmar = enclave.vmar.allocate(Some(0), size, VmarFlags::CAN_MAP_RXW, PAGE_SIZE)?;
+        // let mut base = image_vmar.addr();
+        let runtime_paddr = image_vmar.load_elf_to_epm(&elf, enclave.epm.clone())?;
+        params.runtime_paddr = runtime_paddr.into();
+    } else {
+        return Err(LxError::EFAULT);
+    }
+    let mut user_ptr: UserInPtr<u8> = params.user_vaddr.into();
+    if let Ok(mut data) = user_ptr.read_array(params.user_size) {
+        let elf = ElfFile::new(data.as_slice()).map_err(|_| Err(LxError::EFAULT))?;
+        let size = elf.load_segment_size();
+        let image_vmar = enclave.vmar.allocate(Some(0), size, VmarFlags::CAN_MAP_RXW, PAGE_SIZE)?;
+        // let mut base = image_vmar.addr();
+        let user_paddr = image_vmar.load_elf_to_epm(&elf, enclave.epm.clone())?;
+        params.user_paddr = user_paddr.into();
+    } else {
+        return Err(LxError::EFAULT);
+    }
     info!("Create enclave successfully");
     Ok(0)
 }
@@ -129,14 +162,16 @@ fn create_enclave(data: &mut CreateParams) -> LxResult<usize> {
 fn finalize_enclave(data: &CreateParams) -> LxResult<usize> {
     if let Ok(_) = modify_enclave_by_id(data.eid, |enclave| {
         enclave.is_init = false;
+        let epm = enclave.epm.lock();
+        let utm = enclave.utm.lock();
         let sbi_create = SbiCreate {
             epm_region: SbiRegion {
-                paddr: enclave.epm.pa,
-                size: enclave.epm.size
+                paddr: epm.pa,
+                size: epm.size
             },
             utm_region: SbiRegion {
-                paddr: enclave.utm.pa,
-                size: enclave.utm.size
+                paddr: utm.pa,
+                size: utm.size
             },
             runtime_paddr: data.runtime_paddr,
             user_paddr: data.user_paddr,
@@ -149,6 +184,8 @@ fn finalize_enclave(data: &CreateParams) -> LxResult<usize> {
             }
         };
         warn!("Runtime entry: {:x}", data.params.runtime_entry);
+        drop(epm);
+        drop(utm);
         let ret: Sbiret = sbi_sm_create_enclave(&sbi_create as *const SbiCreate as usize).into();
         if ret.error == 0 {
             enclave.eid = ret.value as isize;
@@ -219,7 +256,7 @@ fn resume_enclave(data: &mut RunParams) -> LxResult<usize> {
 
 fn utm_init_ioctl(data: &CreateParams) -> LxResult<usize> {
     modify_enclave_by_id(data.eid, |enclave| {
-        enclave.utm = Utm::new(data.params.untrusted_size);
+        enclave.utm = Utm::new(page_count(data.params.untrusted_size));
         Ok(0)
     })
 }
