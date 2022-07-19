@@ -1,9 +1,7 @@
 use alloc::sync::Arc;
 use spin::Mutex;
 use xmas_elf::{
-    program::{Flags, ProgramHeader, SegmentData, Type},
-    sections::SectionData,
-    symbol_table::{DynEntry64, Entry},
+    program::{ProgramHeader, SegmentData, Type},
     ElfFile,
 };
 use kernel_hal::PhysAddr;
@@ -26,12 +24,13 @@ impl EnclaveVmar for VmAddressRegion {
             if ph.get_type().unwrap() != Type::Load {
                 continue;
             }
-            todo!(完成对于物理地址的逻辑);
+            warn!("Make vmo...");
             let (vmo, paddr) = make_vmo(elf, ph, epm.clone())?;
             let offset = ph.virtual_addr() as usize / PAGE_SIZE * PAGE_SIZE;
             let flags = ph.flags().to_mmu_flags();
             trace!("ph:{:#x?}, offset:{:#x?}, flags:{:#x?}", ph, offset, flags);
             //映射vmo物理内存块到 VMAR
+            warn!("Map virtual address...");
             self.map_at(offset, vmo.clone(), 0, vmo.len(), flags)?;
             debug!("Map [{:x}, {:x})", offset, offset + vmo.len());
             if first_paddr.is_none() {
@@ -54,6 +53,7 @@ fn make_vmo(elf: &ElfFile, ph: ProgramHeader, epm: Arc<Mutex<MemoryRegion>>) -> 
         page_offset
     );
     let frames = epm.lock().alloc(pages).unwrap();
+    let base_paddr = frames[0].paddr.clone();
     let vmo = VmObject::new_with_frames(pages, frames);
     let data = match ph.get_data(elf).unwrap() {
         SegmentData::Undefined(data) => data,
@@ -61,5 +61,5 @@ fn make_vmo(elf: &ElfFile, ph: ProgramHeader, epm: Arc<Mutex<MemoryRegion>>) -> 
     };
     //调用 VMObjectTrait.write, 分配物理内存，后写入程序数据
     vmo.write(page_offset, data)?;
-    Ok((vmo, frames[0].paddr.clone()))
+    Ok((vmo, base_paddr))
 }

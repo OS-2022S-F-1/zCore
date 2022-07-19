@@ -1,9 +1,7 @@
 #![no_std]
 #![no_main]
-#![feature(default_alloc_error_handler)]
 
-use buddy_system_allocator::LockedHeap;
-
+#[macro_use]
 extern crate linux_user;
 extern crate alloc;
 

@@ -38,9 +38,9 @@ impl EnclaveManagerInner {
         }
     }
 
-    pub fn modify_enclave_by_id<F, T>(&mut self, id: usize, f: F) -> LxResult<T>
+    pub fn modify_enclave_by_id<F, T>(&mut self, id: usize, mut f: F) -> LxResult<T>
         where
-            F: Fn(&mut Enclave) -> LxResult<T>, {
+            F: FnMut(&mut Enclave) -> LxResult<T>, {
         if let Some(enclave) = self.enclave_map.get_mut(&id) {
             f(enclave)
         } else {
@@ -72,7 +72,7 @@ pub fn get_enclave_sbi_eid(id: usize) -> LxResult<isize> {
 
 pub fn modify_enclave_by_id<F, T>(id: usize, f: F) -> LxResult<T>
     where
-        F: Fn(&mut Enclave) -> LxResult<T>, {
+        F: FnMut(&mut Enclave) -> LxResult<T>, {
     ENCLAVE_MANAGER.inner.write().modify_enclave_by_id(id, f)
 }
 

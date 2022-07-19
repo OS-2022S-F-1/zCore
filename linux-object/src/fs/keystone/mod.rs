@@ -10,14 +10,13 @@ use alloc::string::String;
 use async_trait::async_trait;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use core::mem::align_of;
 use lazy_static::lazy_static;
 use kernel_hal::{PAGE_SIZE, PhysAddr};
 use rcore_fs::vfs::PollStatus;
 use spin::Mutex;
 use kernel_hal::mem::PhysFrame;
 
-use zircon_object::{impl_kobject, ZxError};
+use zircon_object::{impl_kobject};
 use zircon_object::object::{KObjectBase, KoID, Signal};
 use zircon_object::vm::{VmAddressRegion, VmObject};
 
@@ -43,7 +42,7 @@ lazy_static! {
     };
 }
 
-struct MemoryRegion {
+pub struct MemoryRegion {
     // root_page_table: usize,
     // ptr: VirtAddr,
     pub size: usize,
@@ -52,6 +51,13 @@ struct MemoryRegion {
     pub frames: Vec<PhysFrame>
 }
 
+pub struct EnclaveParams {
+    pt_ptr: usize,
+    utm_free_ptr: usize,
+    runtime_paddr: usize,
+    user_paddr: usize,
+    free_paddr: usize
+}
 
 pub struct Enclave {
     eid: isize,
@@ -59,6 +65,7 @@ pub struct Enclave {
     utm: Arc<Mutex<MemoryRegion>>, // untrusted share page
     epm: Arc<Mutex<MemoryRegion>>, // enclave private memory
     vmar: Arc<VmAddressRegion>,
+    params: EnclaveParams,
     is_init: bool
 }
 
@@ -123,14 +130,14 @@ impl FileLike for Keystone {
         let offset = offset / PAGE_SIZE;
         modify_enclave_by_id(enclave_id, |enclave| {
             let memory = if enclave.is_init {
-                enclave.epm.clone()
+                enclave.epm.lock()
             } else {
-                enclave.utm.clone()
+                enclave.utm.lock()
             };
             if offset > memory.frames.len() || offset + align_len > memory.frames.len() {
                 Err(LxError::EINVAL)
             } else {
-                let mut alloc_frames: Vec<PhysFrame> = Vec::from(&memory.frames[offset..(offset + align_len)]);
+                let alloc_frames: Vec<PhysFrame> = Vec::from(&memory.frames[offset..(offset + align_len)]);
                 Ok(VmObject::new_with_frames(align_len, alloc_frames))
             }
 

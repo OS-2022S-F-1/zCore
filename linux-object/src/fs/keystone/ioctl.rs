@@ -1,15 +1,12 @@
 use alloc::sync::Arc;
 use core::mem::size_of;
-use core::slice::SliceIndex;
+use spin::Mutex;
 use xmas_elf::ElfFile;
 use kernel_hal::addr::page_count;
 use kernel_hal::user::{UserInOutPtr, UserInPtr};
-use zircon_object::task::IntoResult;
-use zircon_object::util::elf_loader::{ElfExt, VmarExt};
-use zircon_object::vm::{PAGE_SIZE, VmarFlags};
 use crate::error::{LxError, LxResult};
 use crate::fs::keystone::elf_loader::EnclaveVmar;
-use crate::fs::keystone::Utm;
+use crate::fs::keystone::MemoryRegion;
 use super::enclave_manager::*;
 use super::Enclave;
 use super::sbi::*;
@@ -65,18 +62,6 @@ pub struct CreateParams {
      runtime_size: usize,
      user_vaddr: usize,
      user_size: usize,
-
-     pt_ptr: usize,
-     utm_free_ptr: usize,
-    //Used for hash
-     epm_paddr: usize,
-     utm_paddr: usize,
-     runtime_paddr: usize,
-     user_paddr: usize,
-     free_paddr: usize,
-
-     epm_size: usize,
-     utm_size: usize,
     // Runtime Parameters
     params: RuntimeParams
 }
@@ -129,38 +114,41 @@ pub fn ioctl(cmd: Cmd, base: usize) -> LxResult<usize> {
 
 fn create_enclave(params: &mut CreateParams) -> LxResult<usize> {
     info!("Create enclave start...");
-    let enclave = Enclave::new(params.min_pages);
-    params.pt_ptr = enclave.epm.pa;
-    params.epm_size = enclave.epm.size;
+    let mut enclave = Enclave::new(params.min_pages);
+    warn!("runtime vaddr: {:x} user vaddr: {:x}", params.runtime_vaddr, params.user_vaddr);
+    let runtime_ptr: UserInPtr<u8> = params.runtime_vaddr.into();
+    if let Ok(data) = runtime_ptr.read_array(params.runtime_size) {
+        let elf = ElfFile::new(data.as_slice()).map_err(|_| LxError::EFAULT)?;
+        // let size = elf.load_segment_size();
+        // let image_vmar = enclave.vmar.allocate(Some(0), size, VmarFlags::CAN_MAP_RXW, PAGE_SIZE)?;
+        // let mut base = image_vmar.addr();
+        let runtime_paddr = enclave.vmar.load_elf_to_epm(&elf, enclave.epm.clone())?;
+        enclave.params.runtime_paddr = runtime_paddr.into();
+    } else {
+        return Err(LxError::EFAULT);
+    }
+    let user_ptr: UserInPtr<u8> = params.user_vaddr.into();
+    if let Ok(data) = user_ptr.read_array(params.user_size) {
+        let elf = ElfFile::new(data.as_slice()).map_err(|_| LxError::EFAULT)?;
+        // let size = elf.load_segment_size();
+        // let image_vmar = enclave.vmar.allocate(Some(0), size, VmarFlags::CAN_MAP_RXW, PAGE_SIZE)?;
+        // let mut base = image_vmar.addr();
+        let user_paddr = enclave.vmar.load_elf_to_epm(&elf, enclave.epm.clone())?;
+        enclave.params.user_paddr = user_paddr.into();
+    } else {
+        return Err(LxError::EFAULT);
+    }
+    let epm = enclave.epm.lock();
+    enclave.params.pt_ptr = enclave.vmar.table_phys().into();
+    enclave.params.free_paddr = epm.free_paddr().unwrap();
+    drop(epm);
     params.eid = alloc(enclave).unwrap();
-    let mut runtime_ptr: UserInPtr<u8> = params.runtime_vaddr.into();
-    if let Ok(mut data) = runtime_ptr.read_array(params.runtime_size) {
-        let elf = ElfFile::new(data.as_slice()).map_err(|_| Err(LxError::EFAULT))?;
-        let size = elf.load_segment_size();
-        let image_vmar = enclave.vmar.allocate(Some(0), size, VmarFlags::CAN_MAP_RXW, PAGE_SIZE)?;
-        // let mut base = image_vmar.addr();
-        let runtime_paddr = image_vmar.load_elf_to_epm(&elf, enclave.epm.clone())?;
-        params.runtime_paddr = runtime_paddr.into();
-    } else {
-        return Err(LxError::EFAULT);
-    }
-    let mut user_ptr: UserInPtr<u8> = params.user_vaddr.into();
-    if let Ok(mut data) = user_ptr.read_array(params.user_size) {
-        let elf = ElfFile::new(data.as_slice()).map_err(|_| Err(LxError::EFAULT))?;
-        let size = elf.load_segment_size();
-        let image_vmar = enclave.vmar.allocate(Some(0), size, VmarFlags::CAN_MAP_RXW, PAGE_SIZE)?;
-        // let mut base = image_vmar.addr();
-        let user_paddr = image_vmar.load_elf_to_epm(&elf, enclave.epm.clone())?;
-        params.user_paddr = user_paddr.into();
-    } else {
-        return Err(LxError::EFAULT);
-    }
     info!("Create enclave successfully");
     Ok(0)
 }
 
 fn finalize_enclave(data: &CreateParams) -> LxResult<usize> {
-    if let Ok(_) = modify_enclave_by_id(data.eid, |enclave| {
+    modify_enclave_by_id(data.eid, |enclave| {
         enclave.is_init = false;
         let epm = enclave.epm.lock();
         let utm = enclave.utm.lock();
@@ -173,9 +161,9 @@ fn finalize_enclave(data: &CreateParams) -> LxResult<usize> {
                 paddr: utm.pa,
                 size: utm.size
             },
-            runtime_paddr: data.runtime_paddr,
-            user_paddr: data.user_paddr,
-            free_paddr: data.free_paddr,
+            runtime_paddr: enclave.params.runtime_paddr,
+            user_paddr: enclave.params.user_paddr,
+            free_paddr: enclave.params.free_paddr,
             runtime_params: RuntimeParams {
                 runtime_entry: data.params.runtime_entry,
                 user_entry: data.params.user_entry,
@@ -187,19 +175,18 @@ fn finalize_enclave(data: &CreateParams) -> LxResult<usize> {
         drop(epm);
         drop(utm);
         let ret: Sbiret = sbi_sm_create_enclave(&sbi_create as *const SbiCreate as usize).into();
+        warn!("sbi error: {}, value: {}", ret.error, ret.value);
         if ret.error == 0 {
             enclave.eid = ret.value as isize;
             Ok(0)
         } else {
             Err(LxError::EINVAL)
         }
-    }) {
-        Ok(0)
-    } else {
+    }).map_err(|_| {
         error!("Invalid enclave id");
         remove_by_id(data.eid);
-        Err(LxError::EINVAL)
-    }
+        LxError::EINVAL
+    })
 }
 
 fn destroy_enclave(data: &CreateParams) -> LxResult<usize> {
@@ -254,9 +241,10 @@ fn resume_enclave(data: &mut RunParams) -> LxResult<usize> {
     }
 }
 
-fn utm_init_ioctl(data: &CreateParams) -> LxResult<usize> {
+fn utm_init_ioctl(data: &mut CreateParams) -> LxResult<usize> {
     modify_enclave_by_id(data.eid, |enclave| {
-        enclave.utm = Utm::new(page_count(data.params.untrusted_size));
+        enclave.utm = Arc::new(Mutex::new(MemoryRegion::new(page_count(data.params.untrusted_size))));
+        let utm = enclave.utm.lock();
         Ok(0)
     })
 }

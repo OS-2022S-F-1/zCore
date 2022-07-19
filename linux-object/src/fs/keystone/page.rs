@@ -31,7 +31,9 @@ impl MemoryRegion {
     pub fn new(min_pages: usize) -> Self {
         let order = log2(min_pages) + 1;
         let count = 1 << order;
-        let frames = PhysFrame::new_contiguous(count, order);
+        let mut frames = PhysFrame::new_contiguous(count, order);
+        frames.iter_mut().for_each(|frame| {frame.allocated = false; } );
+        warn!("new memory region from {:x} to {:x}", frames[0].paddr, frames[frames.len()-1].paddr);
         Self {
             // root_page_table: epm_vaddr,
             // ptr: epm_vaddr,
@@ -64,6 +66,15 @@ impl MemoryRegion {
         }
         None
     }
+
+    pub fn free_paddr(&self) -> Option<PhysAddr> {
+        for frame in &self.frames {
+            if !frame.allocated {
+                return Some(frame.paddr);
+            }
+        }
+        None
+    }
 }
 
 pub struct EnclavePageTable {
@@ -82,16 +93,16 @@ impl EnclavePageTable {
     }
     fn get_flag(flags: MMUFlags) -> usize {
         let mut pte_flag = PTE_V | PTE_A;
-        if flags & MMUFlags::WRITE != 0 {
+        if flags.contains(MMUFlags::WRITE) {
             pte_flag |= PTE_W;
         }
-        if flags & MMUFlags::READ != 0 {
+        if flags.contains(MMUFlags::READ) {
             pte_flag |= PTE_R;
         }
-        if flags & MMUFlags::EXECUTE != 0 {
+        if flags.contains(MMUFlags::EXECUTE) {
             pte_flag |= PTE_X;
         }
-        if flags & MMUFlags::USER != 0 {
+        if flags.contains(MMUFlags::USER) {
             pte_flag |= PTE_U;
         }
         pte_flag
@@ -103,15 +114,19 @@ impl EnclavePageTable {
             mmu_flags |= MMUFlags::WRITE;
         }
         if flags & PTE_R != 0 {
-            mmu_flag |= MMUFlags::READ;
+            mmu_flags |= MMUFlags::READ;
         }
         if flags & PTE_X != 0 {
-            mmu_flag |= MMUFlags::EXECUTE;
+            mmu_flags |= MMUFlags::EXECUTE;
         }
         if flags & PTE_U != 0 {
-            mmu_flag |= MMUFlags::USER;
+            mmu_flags |= MMUFlags::USER;
         }
         mmu_flags
+    }
+
+    fn next_paddr(ppn: PhysAddr, vaddr: VirtAddr, level: usize) -> PhysAddr {
+        ppn + (((vaddr >> (30 - 9 * level)) & ((1 << 9) - 1)) << 3)
     }
 }
 
@@ -122,22 +137,23 @@ impl GenericPageTable for EnclavePageTable {
 
     fn map(&mut self, page: Page, paddr: PhysAddr, flags: MMUFlags) -> PagingResult {
         let mut ppn = self.root;
+        warn!("Begin mapping {:x} to {:x} ...", page.vaddr, paddr);
         for i in 0..3 {
-            let next_paddr = ppn + page.vaddr >> (30 - 9 * i) & ((1 << 9) - 1);
+            let next_paddr = EnclavePageTable::next_paddr(ppn, page.vaddr, i);
             let mut pte: usize = 0;
-            unsafe { kernel_hal::mem::pmem_read(next_paddr, from_raw_parts_mut(*pte as *mut u8, 8)); }
+            unsafe { kernel_hal::mem::pmem_read(next_paddr, from_raw_parts_mut(&mut pte as *mut usize as *mut u8, 8)); }
             if pte & PTE_V == 0 {
-                let ppn = epm.lock().alloc(1).unwrap()[0].paddr;
+                ppn = self.epm.lock().alloc(1).unwrap()[0].paddr;
                 kernel_hal::mem::pmem_zero(ppn, PAGE_SIZE);
                 pte = EnclavePageTable::get_flag(flags) | (ppn << 10);
-                unsafe { kernel_hal::mem::pmem_write(next_paddr, from_raw_parts(*pte as *u8, 8)); }
+                unsafe { kernel_hal::mem::pmem_write(next_paddr, from_raw_parts(&pte as *const usize as *const u8, 8)); }
             } else {
                 ppn = pte >> 10;
             }
         }
-        let next_paddr = ppn + page.vaddr & ((1 << 12) - 1);
+        let next_paddr = ppn + (page.vaddr & ((1 << 12) - 1));
         let pte = EnclavePageTable::get_flag(flags) | (paddr << 10);
-        unsafe { kernel_hal::mem::pmem_write(next_paddr, from_raw_parts(*pte as *u8, 8)); }
+        unsafe { kernel_hal::mem::pmem_write(next_paddr, from_raw_parts(&pte as *const usize as *const u8, 8)); }
         Ok(())
     }
 
@@ -155,22 +171,22 @@ impl GenericPageTable for EnclavePageTable {
         if let Some(flags) = flags {
             let mut ppn = self.root;
             for i in 0..3 {
-                let next_paddr = ppn + vaddr >> (30 - 9 * i) & ((1 << 9) - 1);
+                let next_paddr = EnclavePageTable::next_paddr(ppn, vaddr, i);
                 let mut pte: usize = 0;
-                unsafe { kernel_hal::mem::pmem_read(next_paddr, from_raw_parts_mut(*pte as *mut u8, 8)); }
+                unsafe { kernel_hal::mem::pmem_read(next_paddr, from_raw_parts_mut(&mut pte as *mut usize as *mut u8, 8)); }
                 if pte & PTE_V == 0 {
                     return Ok(PageSize::Size4K);
                 } else {
                     ppn = pte >> 10;
                 }
             }
-            let next_paddr = ppn + page.vaddr & ((1 << 12) - 1);
-            let pte = if Some(paddr) = _paddr {EnclavePageTable::get_flag(flags) | (paddr << 10) } else {
+            let next_paddr = ppn + vaddr & ((1 << 12) - 1);
+            let pte = if let Some(paddr) = _paddr {EnclavePageTable::get_flag(flags) | (paddr << 10) } else {
                 let mut pte: usize = 0;
-                unsafe { kernel_hal::mem::pmem_read(next_paddr, from_raw_parts_mut(*pte as *mut u8, 8)); }
+                unsafe { kernel_hal::mem::pmem_read(next_paddr, from_raw_parts_mut(&mut pte as *mut usize as *mut u8, 8)); }
                 pte | EnclavePageTable::get_flag(flags)
             };
-            unsafe {kernel_hal::mem::pmem_write(next_paddr, from_raw_parts(*pte as *u8, 8)); }
+            unsafe {kernel_hal::mem::pmem_write(next_paddr, from_raw_parts(&pte as *const usize as *const u8, 8)); }
         }
         Ok(PageSize::Size4K)
     }
@@ -178,18 +194,18 @@ impl GenericPageTable for EnclavePageTable {
     fn query(&self, vaddr: VirtAddr) -> PagingResult<(PhysAddr, MMUFlags, PageSize)> {
         let mut ppn = self.root;
         for i in 0..3 {
-            let next_paddr = ppn + page.vaddr >> (30 - 9 * i) & ((1 << 9) - 1);
+            let next_paddr = EnclavePageTable::next_paddr(ppn, vaddr, i);
             let mut pte: usize = 0;
-            unsafe { kernel_hal::mem::pmem_read(next_paddr, from_raw_parts_mut(*pte as *mut u8, 8)); }
+            unsafe { kernel_hal::mem::pmem_read(next_paddr, from_raw_parts_mut(&mut pte as *mut usize as *mut u8, 8)); }
             if pte & PTE_V == 0 {
                 return Err(PagingError::NotMapped);
             } else {
                 ppn = pte >> 10;
             }
         }
-        let next_paddr = ppn + page.vaddr & ((1 << 12) - 1);
+        let next_paddr = ppn + vaddr & ((1 << 12) - 1);
         let mut pte: usize = 0;
-        unsafe { kernel_hal::mem::pmem_read(next_paddr, from_raw_parts_mut(*pte as *mut u8, 8)); }
+        unsafe { kernel_hal::mem::pmem_read(next_paddr, from_raw_parts_mut(&mut pte as *mut usize as *mut u8, 8)); }
         Ok((
             next_paddr,
             EnclavePageTable::get_mmu_flag(pte & ((1 << 10) - 1)),
@@ -204,18 +220,18 @@ impl GenericPageTable for EnclavePageTable {
         for page_index in 0..size / PAGE_SIZE {
             let mut ppn = self.root;
             for i in 0..3 {
-                let next_paddr = ppn + (vaddr + PAGE_SIZE * page_index) >> (30 - 9 * i) & ((1 << 9) - 1);
+                let next_paddr = EnclavePageTable::next_paddr(ppn, vaddr + PAGE_SIZE * page_index, i);
                 let mut pte: usize = 0;
-                unsafe {kernel_hal::mem::pmem_read(next_paddr, from_raw_parts_mut(*pte as *mut u8, 8)); }
+                unsafe {kernel_hal::mem::pmem_read(next_paddr, from_raw_parts_mut(&mut pte as *mut usize as *mut u8, 8)); }
                 if pte & PTE_V == 0 {
                     return Ok(());
                 } else {
                     ppn = pte >> 10;
                 }
             }
-            let next_paddr = ppn + page.vaddr & ((1 << 12) - 1);
-            let pte = 0;
-            unsafe {kernel_hal::mem::pmem_write(next_paddr, from_raw_parts(*pte as *u8, 8)); }
+            let next_paddr = ppn + vaddr & ((1 << 12) - 1);
+            let pte: usize = 0;
+            unsafe {kernel_hal::mem::pmem_write(next_paddr, from_raw_parts(&pte as *const usize as *const u8, 8)); }
         }
         Ok(())
     }
