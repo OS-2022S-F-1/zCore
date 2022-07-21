@@ -158,7 +158,6 @@ impl VmAddressRegion {
     ) -> ZxResult<Arc<Self>> {
         let mut guard = self.inner.lock();
         let inner = guard.as_mut().ok_or(ZxError::BAD_STATE)?;
-        warn!("inner ok...");
         let offset = self.determine_offset(inner, offset, len, align)?;
         let child = Arc::new(VmAddressRegion {
             flags,

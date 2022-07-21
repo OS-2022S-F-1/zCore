@@ -11,7 +11,7 @@ use async_trait::async_trait;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use lazy_static::lazy_static;
-use kernel_hal::{PAGE_SIZE, PhysAddr};
+use kernel_hal::{MMUFlags, PAGE_SIZE, PhysAddr};
 use rcore_fs::vfs::PollStatus;
 use spin::Mutex;
 use kernel_hal::mem::PhysFrame;
@@ -53,7 +53,6 @@ pub struct MemoryRegion {
 
 pub struct EnclaveParams {
     pt_ptr: usize,
-    utm_free_ptr: usize,
     runtime_paddr: usize,
     user_paddr: usize,
     free_paddr: usize
@@ -125,6 +124,18 @@ impl FileLike for Keystone {
     }
 
     fn get_vmo(&self, offset: usize, len: usize) -> LxResult<Arc<VmObject>> {
+        Err(LxError::EINVAL)
+    }
+}
+
+impl Keystone {
+    pub fn mmap(
+        &self,
+        addr: usize,
+        len: usize,
+        offset: usize,
+        user: bool
+    ) -> LxResult<Arc<VmObject>> {
         let enclave_id = len >> 48;
         let align_len = (len & ((1 << 48) - 1)) / PAGE_SIZE;
         let offset = offset / PAGE_SIZE;
@@ -138,9 +149,11 @@ impl FileLike for Keystone {
                 Err(LxError::EINVAL)
             } else {
                 let alloc_frames: Vec<PhysFrame> = Vec::from(&memory.frames[offset..(offset + align_len)]);
-                Ok(VmObject::new_with_frames(align_len, alloc_frames))
+                let vmo = VmObject::new_with_frames(align_len, alloc_frames);
+                let mmu_flags = if user { MMUFlags::USER | MMUFlags::READ | MMUFlags::WRITE } else { MMUFlags::READ | MMUFlags::WRITE };
+                enclave.vmar.map_at(addr / PAGE_SIZE * PAGE_SIZE, vmo.clone(), 0, vmo.len(), mmu_flags)?;
+                Ok(vmo)
             }
-
         })
     }
 }

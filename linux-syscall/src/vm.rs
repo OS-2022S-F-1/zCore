@@ -1,5 +1,6 @@
 use super::*;
 use bitflags::bitflags;
+use linux_object::fs::KEYSTONE;
 use zircon_object::vm::{pages, MMUFlags, VmObject};
 
 /// Syscalls for virtual memory.
@@ -104,11 +105,13 @@ impl Syscall<'_> {
             let addr = vmar.map(vmar_offset, vmo.clone(), 0, vmo.len(), prot.to_flags())?;
             Ok(addr)
         } else {
-            let file_like = self.linux_process().get_file_like(fd)?;
-            let vmo = file_like.get_vmo(offset as usize, len)?;
-            warn!("Begin to map...");
+            let vmo = if usize::from(fd) == 666 {
+                KEYSTONE.mmap(addr, len, offset as usize, prot.contains(MmapProt::USER))?
+            } else {
+                let file_like = self.linux_process().get_file_like(fd)?;
+                file_like.get_vmo(offset as usize, len)?
+            };
             let addr = vmar.map(vmar_offset, vmo.clone(), 0, vmo.len(), prot.to_flags())?;
-            warn!("Get address {:x}", addr);
             Ok(addr)
         }
     }
@@ -204,6 +207,8 @@ bitflags! {
         const WRITE = 1 << 1;
         /// Data can be executed
         const EXEC = 1 << 2;
+        /// PTE_U in page table
+        const USER = 1 << 6;
     }
 }
 

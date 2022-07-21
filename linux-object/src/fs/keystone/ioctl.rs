@@ -54,14 +54,16 @@ pub struct RuntimeParams {
 }
 
 pub struct CreateParams {
-     eid: usize,
+    eid: usize,
     //Min pages required
-     min_pages: usize,
+    min_pages: usize,
     // Used for load elf and write page table
-     runtime_vaddr: usize,
-     runtime_size: usize,
-     user_vaddr: usize,
-     user_size: usize,
+    runtime_vaddr: usize,
+    runtime_size: usize,
+    user_vaddr: usize,
+    user_size: usize,
+
+    utm_free_ptr: usize,
     // Runtime Parameters
     params: RuntimeParams
 }
@@ -113,7 +115,6 @@ pub fn ioctl(cmd: Cmd, base: usize) -> LxResult<usize> {
 }
 
 fn create_enclave(params: &mut CreateParams) -> LxResult<usize> {
-    info!("Create enclave start...");
     let mut enclave = Enclave::new(params.min_pages);
     warn!("runtime vaddr: {:x} user vaddr: {:x}", params.runtime_vaddr, params.user_vaddr);
     let runtime_ptr: UserInPtr<u8> = params.runtime_vaddr.into();
@@ -143,7 +144,7 @@ fn create_enclave(params: &mut CreateParams) -> LxResult<usize> {
     enclave.params.free_paddr = epm.free_paddr().unwrap();
     drop(epm);
     params.eid = alloc(enclave).unwrap();
-    info!("Create enclave successfully");
+    warn!("Create enclave successfully");
     Ok(0)
 }
 
@@ -242,9 +243,11 @@ fn resume_enclave(data: &mut RunParams) -> LxResult<usize> {
 }
 
 fn utm_init_ioctl(data: &mut CreateParams) -> LxResult<usize> {
+    warn!("Begin to init utm...");
     modify_enclave_by_id(data.eid, |enclave| {
         enclave.utm = Arc::new(Mutex::new(MemoryRegion::new(page_count(data.params.untrusted_size))));
-        let utm = enclave.utm.lock();
+        // let utm = enclave.utm.lock();
+        // data.utm_free_ptr = utm.pa;
         Ok(0)
     })
 }

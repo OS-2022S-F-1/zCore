@@ -11,7 +11,6 @@ impl EnclaveParams {
     pub fn empty() -> Self {
         Self {
             pt_ptr: 0,
-            utm_free_ptr: 0,
             runtime_paddr: 0,
             user_paddr: 0,
             free_paddr: 0

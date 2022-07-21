@@ -92,7 +92,7 @@ impl EnclavePageTable {
         }
     }
     fn get_flag(flags: MMUFlags) -> usize {
-        let mut pte_flag = PTE_V | PTE_A;
+        let mut pte_flag = PTE_V | PTE_A | PTE_D;
         if flags.contains(MMUFlags::WRITE) {
             pte_flag |= PTE_W;
         }
@@ -137,7 +137,6 @@ impl GenericPageTable for EnclavePageTable {
 
     fn map(&mut self, page: Page, paddr: PhysAddr, flags: MMUFlags) -> PagingResult {
         let mut ppn = self.root;
-        warn!("Begin mapping {:x} to {:x} ...", page.vaddr, paddr);
         for i in 0..3 {
             let next_paddr = EnclavePageTable::next_paddr(ppn, page.vaddr, i);
             let mut pte: usize = 0;
