@@ -58,7 +58,7 @@ impl EnclaveManagerInner {
     }
 
     pub fn remove(&mut self, id: usize) {
-        self.enclave_map.remove(&id);
+        self.enclave_map.remove(&id).unwrap();
     }
 }
 

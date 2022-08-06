@@ -78,6 +78,14 @@ impl MemoryRegion {
     }
 }
 
+impl Drop for MemoryRegion {
+    fn drop(&mut self) {
+        self.frames.iter_mut().for_each(|frame| {
+            frame.allocated = true;
+        });
+    }
+}
+
 pub struct EnclavePageTable {
     root: PhysAddr,
     epm: Arc<Mutex<MemoryRegion>>
@@ -239,7 +247,7 @@ impl GenericPageTable for EnclavePageTable {
                     ppn = (pte >> 10) * PAGE_SIZE;
                 }
             }
-            let next_paddr = EnclavePageTable::next_paddr(ppn, vaddr, 2);
+            let next_paddr = EnclavePageTable::next_paddr(ppn, vaddr + PAGE_SIZE * page_index, 2);
             kernel_hal::mem::pmem_zero(next_paddr, 8);
         }
         Ok(())

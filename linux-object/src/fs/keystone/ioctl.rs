@@ -182,7 +182,6 @@ fn finalize_enclave(data: &CreateParams) -> LxResult<usize> {
                 untrusted_size: data.params.untrusted_size
             }
         };
-        warn!("Runtime entry: {:x}", data.params.runtime_entry);
         drop(epm);
         drop(utm);
         let ret: Sbiret = sbi_sm_create_enclave(&sbi_create as *const SbiCreate as usize).into();
@@ -200,15 +199,15 @@ fn finalize_enclave(data: &CreateParams) -> LxResult<usize> {
 }
 
 fn destroy_enclave(data: &CreateParams) -> LxResult<usize> {
-    warn!("Going to destroy enclave...");
     if let Ok(sbi_eid) = get_enclave_sbi_eid(data.eid) {
-        remove_by_id(data.eid);
         if sbi_eid >= 0 {
             let ret: Sbiret = sbi_sm_destroy_enclave(sbi_eid as usize).into();
             if ret.error > 0 {
                 error!("cannot destroy enclave: SBI failed with error code {}", ret.error);
                 Err(LxError::EINVAL)
             } else {
+                remove_by_id(data.eid);
+                warn!("kernel remove enclave completed!");
                 Ok(0)
             }
         } else {
@@ -240,7 +239,6 @@ fn resume_enclave(data: &mut RunParams) -> LxResult<usize> {
     if let Ok(sbi_eid) = get_enclave_sbi_eid(data.eid) {
         if sbi_eid >= 0 {
             let ret: Sbiret = sbi_sm_resume_enclave(sbi_eid as usize).into();
-            warn!("resume enclave return {} {}", ret.error, ret.value);
             data.error = ret.error as usize;
             data.value = ret.value as usize;
             Ok(0)

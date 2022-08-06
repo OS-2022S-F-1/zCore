@@ -60,8 +60,8 @@ pub struct EnclaveParams {
 pub struct Enclave {
     eid: isize,
     // close_on_pexit: i32,
-    utm: Arc<Mutex<MemoryRegion>>, // untrusted share page
     epm: Arc<Mutex<MemoryRegion>>, // enclave private memory
+    utm: Arc<Mutex<MemoryRegion>>, // untrusted share page
     vmar: Arc<VmAddressRegion>,
     params: EnclaveParams,
     is_init: bool
