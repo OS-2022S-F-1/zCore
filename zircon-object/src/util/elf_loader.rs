@@ -26,7 +26,7 @@ impl VmarExt for VmAddressRegion {
             }
             let vmo = make_vmo(elf, ph)?;
             let offset = ph.virtual_addr() as usize / PAGE_SIZE * PAGE_SIZE;
-            let flags = ph.flags().to_mmu_flags();
+            let flags = ph.flags().to_mmu_flags(true);
             trace!("ph:{:#x?}, offset:{:#x?}, flags:{:#x?}", ph, offset, flags);
             //映射vmo物理内存块到 VMAR
             self.map_at(offset, vmo.clone(), 0, vmo.len(), flags)?;
@@ -41,7 +41,7 @@ impl VmarExt for VmAddressRegion {
                 continue;
             }
             let offset = ph.virtual_addr() as usize;
-            let flags = ph.flags().to_mmu_flags();
+            let flags = ph.flags().to_mmu_flags(true);
             let vmo_offset = pages(ph.physical_addr() as usize) * PAGE_SIZE;
             let len = pages(ph.mem_size() as usize) * PAGE_SIZE;
             self.map_at(offset, vmo.clone(), vmo_offset, len, flags)?;
@@ -53,12 +53,12 @@ impl VmarExt for VmAddressRegion {
 /// Flags specific trait
 pub trait FlagsExt {
     /// Translate normal flags into MMU form
-    fn to_mmu_flags(&self) -> MMUFlags;
+    fn to_mmu_flags(&self, user: bool) -> MMUFlags;
 }
 
 impl FlagsExt for Flags {
-    fn to_mmu_flags(&self) -> MMUFlags {
-        let mut flags = MMUFlags::USER;
+    fn to_mmu_flags(&self, user: bool) -> MMUFlags {
+        let mut flags = if user { MMUFlags::USER } else { MMUFlags::empty() };
         if self.is_read() {
             flags.insert(MMUFlags::READ);
         }

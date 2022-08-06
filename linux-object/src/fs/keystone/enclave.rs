@@ -23,7 +23,7 @@ impl Enclave {
         let epm = Arc::new(Mutex::new(MemoryRegion::new(min_pages)));
         Enclave {
             eid: -1,
-            close_on_pexit: 1,
+            // close_on_pexit: 1,
             utm: Arc::new(Mutex::new(MemoryRegion {
                 // root_page_table: epm_vaddr,
                 // ptr: epm_vaddr,

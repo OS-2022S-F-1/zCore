@@ -227,7 +227,7 @@ debugrun:
 
 .PHONY: kernel
 kernel:
-	@echo Building zCore kenel
+	@echo Building zCore kernel
 	SMP=$(SMP) cargo build $(build_args)
 
 .PHONY: disasm

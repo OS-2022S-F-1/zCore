@@ -93,7 +93,6 @@ impl Syscall<'_> {
 
         if flags.contains(MmapFlags::FIXED) {
             // unmap first
-            warn!("Begin to unmap {} {}...", usize::from(fd), len & ((1 << 48) - 1));
             vmar.unmap(addr, if usize::from(fd) == 666 { len & ((1 << 48) - 1) } else { len })?;
         }
         let vmar_offset = flags.contains(MmapFlags::FIXED).then(|| addr - vmar.addr());
@@ -106,7 +105,7 @@ impl Syscall<'_> {
             Ok(addr)
         } else {
             let vmo = if usize::from(fd) == 666 {
-                KEYSTONE.mmap(addr, len, offset as usize, prot.contains(MmapProt::USER))?
+                KEYSTONE.mmap(vmar_offset, len, offset as usize, prot.contains(MmapProt::USER))?
             } else {
                 let file_like = self.linux_process().get_file_like(fd)?;
                 file_like.get_vmo(offset as usize, len)?
@@ -208,7 +207,7 @@ bitflags! {
         /// Data can be executed
         const EXEC = 1 << 2;
         /// PTE_U in page table
-        const USER = 1 << 6;
+        const USER = 1 << 4;
     }
 }
 

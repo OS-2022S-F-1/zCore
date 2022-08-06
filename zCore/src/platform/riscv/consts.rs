@@ -12,4 +12,4 @@ cfg_if! {
 
 pub const PHYSICAL_MEMORY_OFFSET: usize = KERNEL_OFFSET - PHYS_MEMORY_BASE;
 
-pub const KERNEL_HEAP_SIZE: usize = 64 * 1024 * 1024; // 64 MB
+pub const KERNEL_HEAP_SIZE: usize = 80 * 1024 * 1024; // 80 MB

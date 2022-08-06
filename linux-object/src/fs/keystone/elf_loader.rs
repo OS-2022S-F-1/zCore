@@ -13,11 +13,11 @@ use crate::fs::keystone::{MemoryRegion};
 pub trait EnclaveVmar {
     /// Create `VMObject` from all LOAD segments of `elf` and map them to this VMAR.
     /// Return the first `VMObject`.
-    fn load_elf_to_epm(&self, elf: &ElfFile, epm: Arc<Mutex<MemoryRegion>>) -> LxResult<PhysAddr>;
+    fn load_elf_to_epm(&self, elf: &ElfFile, epm: Arc<Mutex<MemoryRegion>>, user: bool) -> LxResult<PhysAddr>;
 }
 
 impl EnclaveVmar for VmAddressRegion {
-    fn load_elf_to_epm(&self, elf: &ElfFile, epm: Arc<Mutex<MemoryRegion>>) -> LxResult<PhysAddr> {
+    fn load_elf_to_epm(&self, elf: &ElfFile, epm: Arc<Mutex<MemoryRegion>>, user: bool) -> LxResult<PhysAddr> {
         let mut first_vmo = None;
         let mut first_paddr = None;
         for ph in elf.program_iter() {
@@ -26,11 +26,11 @@ impl EnclaveVmar for VmAddressRegion {
             }
             let (vmo, paddr) = make_vmo(elf, ph, epm.clone())?;
             let offset = ph.virtual_addr() as usize / PAGE_SIZE * PAGE_SIZE;
-            let flags = ph.flags().to_mmu_flags();
+            let flags = ph.flags().to_mmu_flags(user);
             trace!("ph:{:#x?}, offset:{:#x?}, flags:{:#x?}", ph, offset, flags);
             //映射vmo物理内存块到 VMAR
             self.map_at(offset, vmo.clone(), 0, vmo.len(), flags)?;
-            debug!("Map [{:x}, {:x})", offset, offset + vmo.len());
+            warn!("Map [{:x}, {:x})", offset, offset + vmo.len());
             if first_paddr.is_none() {
                 first_paddr = Some(paddr);
             }

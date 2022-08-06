@@ -6,7 +6,6 @@ mod sbi;
 mod elf_loader;
 
 use alloc::boxed::Box;
-use alloc::string::String;
 use async_trait::async_trait;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
@@ -29,7 +28,7 @@ use super::FileLike;
 /// Abstract fd for keystone driver
 pub struct Keystone {
     base: KObjectBase,
-    path: String,
+    // path: String,
 }
 
 lazy_static! {
@@ -37,7 +36,7 @@ lazy_static! {
     pub static ref KEYSTONE: Arc<Keystone> = {
         Arc::new(Keystone {
             base: KObjectBase::new(),
-            path: "/mnt/keystone".into()
+            // path: "/mnt/keystone".into()
         })
     };
 }
@@ -60,7 +59,7 @@ pub struct EnclaveParams {
 
 pub struct Enclave {
     eid: isize,
-    close_on_pexit: i32,
+    // close_on_pexit: i32,
     utm: Arc<Mutex<MemoryRegion>>, // untrusted share page
     epm: Arc<Mutex<MemoryRegion>>, // enclave private memory
     vmar: Arc<VmAddressRegion>,
@@ -83,7 +82,7 @@ impl FileLike for Keystone {
     fn dup(&self) -> Arc<dyn FileLike> {
         Arc::new(Keystone {
             base: KObjectBase::new(),
-            path: "/mnt/keystone".into()
+            // path: "/mnt/keystone".into()
         })
     }
 
@@ -123,7 +122,7 @@ impl FileLike for Keystone {
         ioctl(request.into(),arg1.into())
     }
 
-    fn get_vmo(&self, offset: usize, len: usize) -> LxResult<Arc<VmObject>> {
+    fn get_vmo(&self, _offset: usize, _len: usize) -> LxResult<Arc<VmObject>> {
         Err(LxError::EINVAL)
     }
 }
@@ -131,29 +130,25 @@ impl FileLike for Keystone {
 impl Keystone {
     pub fn mmap(
         &self,
-        addr: usize,
+        addr: Option<usize>,
         len: usize,
-        offset: usize,
+        _offset: usize,
         user: bool
     ) -> LxResult<Arc<VmObject>> {
         let enclave_id = len >> 48;
         let align_len = (len & ((1 << 48) - 1)) / PAGE_SIZE;
-        let offset = offset / PAGE_SIZE;
+        // let offset = offset / PAGE_SIZE;
         modify_enclave_by_id(enclave_id, |enclave| {
-            let memory = if enclave.is_init {
-                enclave.epm.lock()
-            } else {
-                enclave.utm.lock()
-            };
-            if offset > memory.frames.len() || offset + align_len > memory.frames.len() {
-                Err(LxError::EINVAL)
-            } else {
-                let alloc_frames: Vec<PhysFrame> = Vec::from(&memory.frames[offset..(offset + align_len)]);
-                let vmo = VmObject::new_with_frames(align_len, alloc_frames);
-                let mmu_flags = if user { MMUFlags::USER | MMUFlags::READ | MMUFlags::WRITE } else { MMUFlags::READ | MMUFlags::WRITE };
-                enclave.vmar.map_at(addr / PAGE_SIZE * PAGE_SIZE, vmo.clone(), 0, vmo.len(), mmu_flags)?;
-                Ok(vmo)
-            }
+            let mut memory = enclave.utm.lock();
+            let alloc_frames = memory.alloc(align_len).unwrap();
+            // let alloc_frames: Vec<PhysFrame> = Vec::from(&memory.frames[offset..(offset + align_len)]);
+            drop(memory);
+            warn!("Begin to keystone map from {:x}...", alloc_frames[0].paddr);
+            let vmo = VmObject::new_with_frames(align_len, alloc_frames);
+            let mmu_flags = if user { MMUFlags::USER | MMUFlags::READ | MMUFlags::WRITE } else { MMUFlags::READ | MMUFlags::WRITE };
+            enclave.vmar.map(addr, vmo.clone(), 0, vmo.len(), mmu_flags)?;
+            warn!("Keystone map success!");
+            Ok(vmo)
         })
     }
 }

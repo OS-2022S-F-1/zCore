@@ -69,7 +69,6 @@ uintptr_t dispatch_edgecall_syscall(struct edge_syscall* syscall_data_ptr, size_
 uintptr_t dispatch_edgecall_ocall( unsigned long call_id,
 				   void* data, size_t data_len,
 				   void* return_buffer, size_t return_len){
-
   uintptr_t ret;
   /* For now we assume by convention that the start of the buffer is
    * the right place to put calls */

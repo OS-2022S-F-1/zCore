@@ -124,8 +124,8 @@ eyrie_boot(uintptr_t dummy, // $a0 contains the return value from the SBI
   runtime_va_start = (uintptr_t) &rt_base;
   kernel_offset = runtime_va_start - runtime_paddr;
 
-  printf("UTM : 0x%lx-0x%lx (%u KB)", utm_vaddr, utm_vaddr+utm_size, utm_size/1024);
-  printf("DRAM: 0x%lx-0x%lx (%u KB)", dram_base, dram_base + dram_size, dram_size/1024);
+  printf("UTM : 0x%llx-0x%llx (%llu KB)\n", utm_vaddr, utm_vaddr+utm_size, utm_size/1024);
+  printf("DRAM: 0x%llx-0x%llx (%llu KB)\n", dram_base, dram_base + dram_size, dram_size/1024);
 #ifdef USE_FREEMEM
   freemem_va_start = __va(free_paddr);
   freemem_size = dram_base + dram_size - free_paddr;
@@ -169,7 +169,7 @@ eyrie_boot(uintptr_t dummy, // $a0 contains the return value from the SBI
   /* Enable the FPU */
   csr_write(sstatus, csr_read(sstatus) | 0x6000);
 
-  printf("eyrie boot finished. drop to the user land ...");
+  printf("eyrie boot finished. drop to the user land ...\n");
   /* booting all finished, droping to the user land */
   return;
 }
