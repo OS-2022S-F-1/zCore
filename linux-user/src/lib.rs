@@ -13,10 +13,10 @@ extern crate core;
 #[macro_use]
 extern crate bitflags;
 
-use alloc::string::String;
+use alloc::string::{FromUtf8Error, String};
+use alloc::vec;
 use alloc::vec::Vec;
 use core::arch::asm;
-use core::str::Utf8Error;
 use buddy_system_allocator::LockedHeap;
 pub use console::{flush, STDIN, STDOUT};
 pub use syscall::*;
@@ -48,9 +48,8 @@ pub extern "C" fn _start() -> ! {
 
 #[linkage = "weak"]
 #[no_mangle]
-fn main(args: Vec<String>) -> i32 {
+fn main(_args: Vec<String>) -> i32 {
     panic!("Cannot find main!");
-    0
 }
 
 bitflags! {
@@ -162,6 +161,7 @@ pub fn mail_write(pid: usize, buf: &[u8]) -> isize {
 
 pub fn exit(exit_code: i32) -> ! {
     console::flush();
+    println!("Exit user space...");
     sys_exit(exit_code);
 }
 
@@ -247,9 +247,11 @@ pub fn pipe(pipe_fd: &mut [usize]) -> isize {
 
 // 从一个 C 风格的零结尾字符串构造一个字符切片。
 /// Forms a zero-terminated string slice from a user pointer to a c style string.
-fn as_c_str(ptr: usize) -> Result<&'static str, Utf8Error> {
+fn as_c_str(ptr: usize) -> Result<String, FromUtf8Error> {
     let len = unsafe { (0usize..).find(|&i| *((ptr + i) as *const u8) == 0).unwrap() };
-    core::str::from_utf8(unsafe { core::slice::from_raw_parts(ptr as *const u8, len + 1) })
+    let mut str: Vec<u8> = vec![0; len + 1];
+    str.copy_from_slice(unsafe { core::slice::from_raw_parts(ptr as *const u8, len + 1) });
+    String::from_utf8(str)
 }
 
 fn args(sp: usize) -> Vec<String> {
@@ -261,7 +263,7 @@ fn args(sp: usize) -> Vec<String> {
     let mut result = Vec::new();
     ptr.iter().for_each(|ptr| {
         if let Ok(st) = as_c_str(*ptr) {
-            result.push(st.into());
+            result.push(st);
         }
     });
     result

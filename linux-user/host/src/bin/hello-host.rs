@@ -25,5 +25,11 @@ fn main(args: Vec<String>) -> i32 {
     println!("Prepared to run...");
     enclave.run(&mut ret);
     println!("Enclave task completed!");
+    drop(enclave);
+    println!("Drop enclave!");
+    drop(elf_data);
+    println!("Drop elf data!");
+    drop(args);
+    println!("Drop args!");
     0
 }
